@@ -3,10 +3,9 @@
 # moment the tablet is plugged into USB, and close it again on unplug.
 # Started automatically by the GNOME session (see the autostart entry).
 #
-# Uses native Google Chrome in a dedicated data dir so it is a separate,
-# reliably-killable instance (Ubuntu's Firefox/Chromium are snaps, which can't
-# do a clean dedicated kiosk, and --kiosk only works when it *starts* the
-# browser instance).
+# Uses native Google Chrome in a dedicated data dir so it is a separate kiosk
+# (Ubuntu's Firefox/Chromium are snaps, which can't do a clean dedicated kiosk,
+# and --kiosk only works when it *starts* the browser instance).
 #
 # Part of remarkable_linlink. Installed to ~/.local/bin by install-host.sh.
 
@@ -16,7 +15,18 @@ PORT="2001"
 DATA_DIR="$HOME/.config/remarkable-kiosk"
 POLL=2          # seconds between checks
 
+# Kill any kiosk Chrome using our data dir. This is how we both close on unplug
+# AND avoid a second viewer: relaunching Chrome with an existing data dir would
+# just open another window in the same instance -> two stream connections ->
+# the server shows "Rate limited" and a blank screen. Matching the data dir also
+# catches re-parented processes that PID tracking misses.
+kill_kiosk() {
+    pkill -f -- "--user-data-dir=$DATA_DIR" 2>/dev/null || true
+}
+
 launch_kiosk() {
+    kill_kiosk          # ensure exactly one fresh, kiosk (fullscreen) instance
+    sleep 1
     google-chrome \
         --user-data-dir="$DATA_DIR" \
         --kiosk --app="$URL" \
@@ -25,11 +35,9 @@ launch_kiosk() {
         --no-first-run --no-default-browser-check \
         --password-store=basic --disable-session-crashed-bubble \
         >/dev/null 2>&1 &
-    ff_pid=$!
 }
 
 prev="down"     # last known state, so we only act on transitions (edges)
-ff_pid=""       # PID of the kiosk Chrome we launched
 
 while true; do
     if nc -z -w1 "$HOST" "$PORT" 2>/dev/null; then
@@ -39,16 +47,9 @@ while true; do
     fi
 
     if [ "$state" = "up" ] && [ "$prev" = "down" ]; then
-        # Tablet just appeared -> open the stream fullscreen.
-        launch_kiosk
+        launch_kiosk    # tablet plugged in -> open the stream fullscreen
     elif [ "$state" = "down" ] && [ "$prev" = "up" ]; then
-        # Tablet just went away -> close the kiosk we opened.
-        if [ -n "$ff_pid" ] && kill -0 "$ff_pid" 2>/dev/null; then
-            kill "$ff_pid" 2>/dev/null
-            sleep 3
-            kill -9 "$ff_pid" 2>/dev/null   # force if still alive
-        fi
-        ff_pid=""
+        kill_kiosk      # tablet unplugged -> close the kiosk
     fi
 
     prev="$state"

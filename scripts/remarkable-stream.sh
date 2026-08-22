@@ -12,10 +12,14 @@ DATA_DIR="$HOME/.config/remarkable-kiosk"
 # Wait up to ~30s for the tablet to be reachable after plugging in.
 for _ in $(seq 1 30); do
     if nc -z -w1 "$HOST" "$PORT" 2>/dev/null; then
-        # Native Chrome in a dedicated data dir = a separate, reliably-killable
-        # kiosk that persists its own login token. The GPU flags are a
-        # portability safety net so WebGL renders even on machines where
-        # hardware WebGL is blocklisted/broken (harmless where it already works).
+        # Close any existing kiosk first: a second viewer on the same data dir
+        # makes the server return "Rate limited" (blank screen). This guarantees
+        # exactly one fresh, fullscreen (kiosk) instance.
+        pkill -f -- "--user-data-dir=$DATA_DIR" 2>/dev/null || true
+        sleep 1
+        # Native Chrome in a dedicated data dir = a separate kiosk that persists
+        # its own login token. The GPU flags are a portability safety net so
+        # WebGL renders even where hardware WebGL is blocklisted/broken.
         exec google-chrome \
             --user-data-dir="$DATA_DIR" \
             --kiosk --app="$URL" \
