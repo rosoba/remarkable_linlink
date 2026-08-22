@@ -20,9 +20,12 @@ for _ in $(seq 1 30); do
         # Native Chrome in a dedicated data dir = a separate kiosk that persists
         # its own login token. The GPU flags are a portability safety net so
         # WebGL renders even where hardware WebGL is blocklisted/broken.
+        # --start-fullscreen backs up --kiosk; --ozone-platform-hint=auto makes
+        # Chrome a native Wayland client on Wayland (covers the GNOME bar + dock).
         exec google-chrome \
             --user-data-dir="$DATA_DIR" \
-            --kiosk --app="$URL" \
+            --kiosk --start-fullscreen --app="$URL" \
+            --ozone-platform-hint=auto \
             --ignore-certificate-errors --test-type \
             --ignore-gpu-blocklist --enable-unsafe-swiftshader \
             --no-first-run --no-default-browser-check \

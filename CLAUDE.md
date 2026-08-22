@@ -100,6 +100,14 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.
 
+## Kiosk fullscreen
+- Launchers pass `--kiosk --start-fullscreen --ozone-platform-hint=auto`. On **X11**
+  `--kiosk` fully covers the GNOME top bar + dock. On **Wayland** (Ubuntu 24.04
+  default) XWayland `--kiosk` can leave the panels showing; `--ozone-platform-hint=auto`
+  runs Chrome as a native Wayland client, which covers them. Fallback: log in on
+  Ubuntu-on-Xorg, or F11. The letterbox bars inside (portrait tablet on landscape
+  monitor) are geometric — only a portrait display removes them.
+
 ## If asked to extend
 - Support rM1/rM2: same scripts; change tablet binary to `RM1`/`RM2`; skip Developer Mode.
 - The tablet screen params (1632×2154, BGRA, flipped) are baked into the served page; the
