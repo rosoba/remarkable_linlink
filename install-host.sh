@@ -38,6 +38,9 @@ echo "  - Installing scripts to $BIN_DIR"
 mkdir -p "$BIN_DIR"
 install -m 755 "$REPO_DIR/scripts/remarkable-stream.sh"       "$BIN_DIR/remarkable-stream.sh"
 install -m 755 "$REPO_DIR/scripts/remarkable-stream-watch.sh" "$BIN_DIR/remarkable-stream-watch.sh"
+# Wired file-management tools (need passwordless SSH to the tablet; see README).
+install -m 755 "$REPO_DIR/scripts/rm-pull.py"                 "$BIN_DIR/rm-pull.py"
+install -m 755 "$REPO_DIR/scripts/rm-push.py"                 "$BIN_DIR/rm-push.py"
 
 # 4. Autostart entry (starts the plug-in watcher with the GNOME session)
 echo "  - Installing autostart watcher to $AUTOSTART_DIR"

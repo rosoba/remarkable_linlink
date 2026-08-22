@@ -15,6 +15,14 @@ PORT="2001"
 DATA_DIR="$HOME/.config/remarkable-kiosk"
 POLL=2          # seconds between checks
 
+# Optional: mirror the tablet's PDFs/EPUBs locally on plug-in. This is OPT-IN:
+# it only runs if the mirror directory already exists AND rm-pull.py is installed.
+# So a kiosk-only host (no mirror dir) is unaffected. The pull is ONE-WAY and
+# read-only on the tablet (see rm-pull.py) -> it can never alter/delete tablet
+# content. Create the dir to enable:  mkdir -p ~/remarkable_mirror
+MIRROR_DIR="${REMARKABLE_MIRROR_DIR:-$HOME/remarkable_mirror}"
+PULL_BIN="$HOME/.local/bin/rm-pull.py"
+
 # Kill any kiosk Chrome using our data dir. This is how we both close on unplug
 # AND avoid a second viewer: relaunching Chrome with an existing data dir would
 # just open another window in the same instance -> two stream connections ->
@@ -37,6 +45,14 @@ launch_kiosk() {
         >/dev/null 2>&1 &
 }
 
+pull_mirror() {
+    # opt-in guards: enabled only when both the dir and the tool are present
+    [ -d "$MIRROR_DIR" ] || return 0
+    [ -x "$PULL_BIN" ] || return 0
+    # background + logged, so the kiosk opens without waiting on the copy
+    "$PULL_BIN" "$MIRROR_DIR" --host "$HOST" >>"$MIRROR_DIR/.rm-pull.log" 2>&1 &
+}
+
 prev="down"     # last known state, so we only act on transitions (edges)
 
 while true; do
@@ -48,6 +64,7 @@ while true; do
 
     if [ "$state" = "up" ] && [ "$prev" = "down" ]; then
         launch_kiosk    # tablet plugged in -> open the stream fullscreen
+        pull_mirror     # ...and mirror PDFs/EPUBs locally, if enabled
     elif [ "$state" = "down" ] && [ "$prev" = "up" ]; then
         kill_kiosk      # tablet unplugged -> close the kiosk
     fi
