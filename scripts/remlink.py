@@ -54,6 +54,17 @@ def port_open(host, port, timeout=1.5):
         return False
 
 
+def ssh_authorized(host):
+    """True only if our key actually logs in — not just that :22 is reachable."""
+    try:
+        return subprocess.run(
+            ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
+             "-o", "StrictHostKeyChecking=accept-new", f"root@{host}", "true"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+    except OSError:
+        return False
+
+
 def kiosk_running():
     for pid in os.listdir("/proc"):
         if not pid.isdigit():
@@ -121,6 +132,7 @@ class App:
                            command=lambda c=cmd, t=title, k=cat: self.run(c, t, k))
             b.pack(side="left", padx=3)
             self.buttons.append(b)
+        ttk.Button(act, text="Restart kiosk", command=self.restart_kiosk).pack(side="left", padx=3)
         ttk.Button(act, text="Open mirror", command=self.open_mirror).pack(side="left", padx=3)
         self.stop_btn = ttk.Button(act, text="Stop", command=self.stop, state="disabled")
         self.stop_btn.pack(side="right", padx=3)
@@ -140,14 +152,15 @@ class App:
     def poll_status(self):
         while True:
             ssh = port_open(HOST, SSH_PORT)
+            auth = ssh_authorized(HOST) if ssh else False
             stream = port_open(HOST, STREAM_PORT)
             conn = {
-                "Tablet (SSH)": GREEN if ssh else GREY,
+                "Tablet (SSH)": GREEN if auth else (ORANGE if ssh else GREY),
                 "Stream :2001": GREEN if stream else (ORANGE if ssh else GREY),
                 "Kiosk": GREEN if kiosk_running() else GREY,
                 "Service": GREEN if stream else (RED if ssh else GREY),
             }
-            self.q.put(("status", (conn, load_state(), ssh, stream)))
+            self.q.put(("status", (conn, load_state(), ssh, auth, stream)))
             time.sleep(3)
 
     # ---- run an action (background) ----
@@ -192,19 +205,34 @@ class App:
         os.makedirs(MIRROR_DIR, exist_ok=True)
         subprocess.Popen(["xdg-open", MIRROR_DIR])
 
+    def restart_kiosk(self):
+        """Fix 'Rate limited' by closing ALL kiosk windows, then opening exactly one."""
+        subprocess.run(["pkill", "-f", f"--user-data-dir={KIOSK_DIR}"],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        launcher = _tool("remarkable-stream.sh")
+        if os.path.exists(launcher):
+            subprocess.Popen([launcher], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self._append("\n(restart kiosk: closed duplicate viewers, opening one)\n")
+
     # ---- main-thread queue drain ----
     def drain(self):
         try:
             while True:
                 kind, payload = self.q.get_nowait()
                 if kind == "status":
-                    conn, state, ssh, stream = payload
+                    conn, state, ssh, auth, stream = payload
                     for key, color in conn.items():
                         self.conn_dots[key].config(fg=color)
                     self.update_library(state)
-                    self.hint.config(text=("streaming — kiosk should be open" if stream
-                                           else "service down — click Heal" if ssh
-                                           else "tablet not connected"))
+                    if not ssh:
+                        hint = "tablet not connected"
+                    elif not auth:
+                        hint = "SSH key not authorized — run:  ssh-copy-id root@10.11.99.1"
+                    elif not stream:
+                        hint = "service down — click Heal"
+                    else:
+                        hint = "streaming — kiosk should be open"
+                    self.hint.config(text=hint)
                 elif kind == "line":
                     line, title = payload
                     self._append(line)

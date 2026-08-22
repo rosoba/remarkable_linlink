@@ -65,8 +65,12 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
 - `scripts/remlink.py` — the **remlink** manager (Tkinter, phase 1); installed as
   `~/.local/bin/remlink` + an app-menu entry, and opened on plug-in by the watcher
   (singleton via `pgrep -f`). Thin wrapper over the rm-* CLIs (parses their stdout
-  for progress); holds NO logic. Status dots derive from `:22`/`:2001` (no SSH
-  latency). Needs `python3-tk`. Design + roadmap: `docs/concepts/status-app.md`.
+  for progress); holds NO logic. Needs `python3-tk`. Roadmap: `docs/concepts/status-app.md`.
+  The "Tablet (SSH)" dot does a real `ssh … true` auth check (green = key logs in,
+  orange = `:22` reachable but key NOT authorized → run `ssh-copy-id`). "Restart
+  kiosk" kills all kiosk windows by data-dir + relaunches one via
+  `remarkable-stream.sh` — the fix for "Rate limited" (two viewers). Library counts
+  come from `~/.cache/remlink-state.json`, written by the rm-* tools on full runs.
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.

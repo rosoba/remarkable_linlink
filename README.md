@@ -219,6 +219,8 @@ Progress is logged to `~/remarkable_mirror/.rm-pull.log`.
 | `ssh` rejects the key (`no matching host key`, RSA "legacy") | Modern OpenSSH treats `ssh-rsa` as legacy. Add to `~/.ssh/config`: `Host 10.11.99.1` / `PubkeyAcceptedKeyTypes=+ssh-rsa` / `HostKeyAlgorithms=+ssh-rsa`. |
 | reMarkable 2 (not Pro) SSH key | rM2 doesn't accept `ed25519` keys — use `rsa`/`ecdsa`. |
 | Kiosk stops opening after a while; SSH works but `:2001` is closed; service `not-found` | A tablet **OS update wiped the systemd unit**. The watcher auto-heals via `rm-heal.sh`; or run `rm-heal.sh` / `./setup-tablet.sh` manually. Binary/token survive, so no re-login. |
+| remlink's "Tablet (SSH)" dot is **orange**, or `rm-*` tools can't connect on a new computer | Port 22 is reachable but **this computer's key isn't authorized on the tablet**. Run `ssh-copy-id root@10.11.99.1` once (per computer). The dot turns green only when the key actually logs in. |
+| "Rate limited" on a second computer after updating | A **stale pre-update kiosk** is still open → two viewers. Click **Restart kiosk** in remlink (closes duplicates, opens one), or `pkill -f -- '--user-data-dir=$HOME/.config/remarkable-kiosk'`. Do NOT delete the kiosk profile — that only drops your login. |
 
 ### Handy tablet commands (over SSH)
 ```bash
