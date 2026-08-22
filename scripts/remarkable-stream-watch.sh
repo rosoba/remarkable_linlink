@@ -23,6 +23,13 @@ POLL=2          # seconds between checks
 MIRROR_DIR="${REMARKABLE_MIRROR_DIR:-$HOME/remarkable_mirror}"
 PULL_BIN="$HOME/.local/bin/rm-pull.py"
 
+# Self-heal: a reMarkable OS update wipes the systemd unit (see rm-heal.sh), so
+# the tablet is reachable over SSH (:22) but the stream (:2001) is down. When we
+# see that, reinstall the service once per connection so the kiosk can come up.
+HEAL_BIN="$HOME/.local/bin/rm-heal.sh"
+SSH_PORT=22
+HEAL_LOG="$HOME/.cache/remarkable-heal.log"
+
 # Kill any kiosk Chrome using our data dir. This is how we both close on unplug
 # AND avoid a second viewer: relaunching Chrome with an existing data dir would
 # just open another window in the same instance -> two stream connections ->
@@ -54,12 +61,27 @@ pull_mirror() {
 }
 
 prev="down"     # last known state, so we only act on transitions (edges)
+healed="false"  # heal at most once per connection (reset on unplug / when healthy)
 
 while true; do
     if nc -z -w1 "$HOST" "$PORT" 2>/dev/null; then
         state="up"
     else
         state="down"
+    fi
+
+    # Self-heal: SSH reachable but stream down -> service was wiped by an OS
+    # update. Reinstall once; next poll then sees :2001 up and opens the kiosk.
+    if [ "$state" = "up" ]; then
+        healed="false"                                   # healthy -> re-arm
+    elif nc -z -w1 "$HOST" "$SSH_PORT" 2>/dev/null; then
+        if [ "$healed" = "false" ] && [ -x "$HEAL_BIN" ]; then
+            mkdir -p "$(dirname "$HEAL_LOG")"
+            "$HEAL_BIN" "$HOST" >>"$HEAL_LOG" 2>&1 || true
+            healed="true"
+        fi
+    else
+        healed="false"                                   # unplugged -> re-arm
     fi
 
     if [ "$state" = "up" ] && [ "$prev" = "down" ]; then

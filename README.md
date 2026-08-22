@@ -29,6 +29,12 @@ Tested on: Ubuntu 24.04 (GNOME/Wayland, snap Firefox) + reMarkable Paper Pro
 - **Only ONE viewer at a time.** A second simultaneous connection shows a
   **"Rate limited"** badge and a blank canvas. (If you see blank + "Rate limited",
   close the other browser/tab that's viewing the stream.)
+- **A tablet OS update wipes the streaming service.** reMarkable updates replace
+  the whole root partition, deleting the systemd unit in `/etc` — so after an
+  update the tablet is reachable over SSH but `:2001` is closed and no kiosk opens.
+  The binary, config and login token live in `/home/root` and survive (no
+  re-login). The watcher auto-heals this (reinstalls via `rm-heal.sh`); you can
+  also run `./setup-tablet.sh` or `rm-heal.sh` by hand.
 - **Ubuntu's Firefox and Chromium are snaps**, which can't run a clean dedicated
   kiosk (`--kiosk` only applies when it *starts* the instance; custom-path profiles
   don't lock properly; PID-kill for auto-close is unreliable). So we use **native
@@ -78,6 +84,7 @@ the one-time `ssh-copy-id` (needs the tablet password interactively).
 | `scripts/rm-push.py` | Ubuntu → tablet (SSH) | Upload a PDF/EPUB to the tablet (add-only; never deletes). |
 | `scripts/rm-render.py` | Ubuntu → tablet (SSH) | Export handwritten notebooks to PDF (offline; self-managing venv). |
 | `scripts/rm-annotate.py` | Ubuntu → tablet (SSH) | Export annotated PDFs (source page + your ink, incl. margin notes) to PDF. |
+| `scripts/rm-heal.sh` | Ubuntu → tablet (SSH) | Reinstall the stream service after a tablet OS update (auto-run by the watcher). |
 | `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
 
 Installed locations on the host:
@@ -203,6 +210,7 @@ Progress is logged to `~/remarkable_mirror/.rm-pull.log`.
 | Firefox "already running, not responding … use a different profile" | snap Firefox + custom profile path. We use native Chrome instead — don't launch the kiosk via snap Firefox. |
 | `ssh` rejects the key (`no matching host key`, RSA "legacy") | Modern OpenSSH treats `ssh-rsa` as legacy. Add to `~/.ssh/config`: `Host 10.11.99.1` / `PubkeyAcceptedKeyTypes=+ssh-rsa` / `HostKeyAlgorithms=+ssh-rsa`. |
 | reMarkable 2 (not Pro) SSH key | rM2 doesn't accept `ed25519` keys — use `rsa`/`ecdsa`. |
+| Kiosk stops opening after a while; SSH works but `:2001` is closed; service `not-found` | A tablet **OS update wiped the systemd unit**. The watcher auto-heals via `rm-heal.sh`; or run `rm-heal.sh` / `./setup-tablet.sh` manually. Binary/token survive, so no re-login. |
 
 ### Handy tablet commands (over SSH)
 ```bash

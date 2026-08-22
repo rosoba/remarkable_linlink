@@ -26,6 +26,12 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
    `--ignore-certificate-errors --test-type`.
 6. SSH: RSA key (Paper Pro / rM2 reject ed25519); modern OpenSSH may need
    `PubkeyAcceptedKeyTypes=+ssh-rsa` in `~/.ssh/config`.
+7. **A tablet OS update wipes the systemd unit.** Updates replace the whole root
+   partition; `/etc/systemd/system/goMarkableStream.service` vanishes → `:2001`
+   closed → no kiosk, while `:22` still works. Binary/config/JWT secret survive in
+   `/home/root` (so no re-login). Symptom = SSH up, stream down. Fix: `rm-heal.sh`
+   (re-runs `goMarkableStream install` using the surviving binary); the watcher
+   runs it automatically. `/home/root` persists across updates; `/etc` does not.
 
 ## Files
 - `install-host.sh` — host installer (Chrome, scripts, autostart, desktop icon). Idempotent.
@@ -52,6 +58,10 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   so margin notes aren't clipped. On-page + margin ink align well on Paper Pro.
   NOT handled: text highlights (`GlyphRange`, rmc skips them) and per-page zoom/pan
   (`customZoom*` in `.content`) — a zoomed page's ink may be offset.
+- `scripts/rm-heal.sh` — restore the service after an OS update (see fact #7),
+  reusing the surviving `/home/root` binary. Watcher runs it when `:22` up + `:2001`
+  down; also runnable by hand. Distinct from `setup-tablet.sh` (which re-copies the
+  binary and is for first-time install).
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.
