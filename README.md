@@ -46,26 +46,33 @@ Tested on: Ubuntu 24.04 (GNOME/Wayland, snap Firefox) + reMarkable Paper Pro
 
 On the **Ubuntu computer**:
 ```bash
-git clone <this-repo> ~/Coding/remarkable_linlink
-cd ~/Coding/remarkable_linlink
-./install-host.sh                 # Chrome + scripts + autostart + desktop icon
+git clone https://github.com/rosoba/remarkable_linlink.git ~/remarkable_linlink
+cd ~/remarkable_linlink
+./install-host.sh     # Chrome, scripts, watcher, status app, desktop entries,
+                      # + an RSA key and the tablet ~/.ssh/config block
 ```
 
-On the **reMarkable Paper Pro**:
+`install-host.sh` is idempotent — to **update** later: `git pull && ./install-host.sh`.
+
+On the **reMarkable Paper Pro** (only when linking a tablet to this computer):
 1. **Enable Developer Mode** (Settings → General → Software / Help). ⚠️ This **wipes
    the device** — sync/back up first. Set a device password if prompted.
 2. Plug in via USB. Find the SSH root password on the tablet:
    *Settings → Help → Copyrights and licenses* (scroll to the bottom).
 
-Back on the **computer**:
+Back on the **computer** (the key + `~/.ssh/config` block are already in place):
 ```bash
-ssh-keygen -t rsa                 # only if you don't already have a key
-ssh-copy-id root@10.11.99.1       # enter the tablet's root password once
+ssh-copy-id root@10.11.99.1       # authorize this computer; enter the tablet password once
 ./setup-tablet.sh                 # installs + configures goMarkableStream over SSH
 ```
 
 First plug-in: the kiosk opens, **log in once** (goMarkableStream default is
 `admin` / `password` unless you change it) → done forever after.
+
+> **Adding a second computer** (tablet already streaming elsewhere): just
+> `git clone … && ./install-host.sh`, then `ssh-copy-id root@10.11.99.1` while the
+> tablet is plugged into *that* computer. No `setup-tablet.sh` needed — the tablet
+> is already provisioned. `mkdir ~/remarkable_mirror` there if you want auto-mirror.
 
 That's it. Steps that **cannot** be pre-done for you: enabling Developer Mode and
 the one-time `ssh-copy-id` (needs the tablet password interactively).

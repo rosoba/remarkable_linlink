@@ -38,6 +38,32 @@ if ! python3 -c 'import tkinter' >/dev/null 2>&1; then
     sudo apt-get install -y python3-tk
 fi
 
+# 2b. SSH access to the tablet — needed by the rm-* file tools and setup-tablet.sh.
+#     RSA key (Paper Pro / rM2 reject ed25519), passphraseless so the background
+#     watcher can use it non-interactively; plus an idempotent config block that
+#     applies the legacy-algorithm options the tablet requires.
+SSH_DIR="$HOME/.ssh"; SSH_CFG="$SSH_DIR/config"
+mkdir -p "$SSH_DIR"; chmod 700 "$SSH_DIR"
+if [ ! -f "$SSH_DIR/id_rsa" ]; then
+    echo "  - Generating an RSA SSH key (~/.ssh/id_rsa)"
+    ssh-keygen -t rsa -b 4096 -N "" -C "remarkable_linlink@$(hostname)" -f "$SSH_DIR/id_rsa" >/dev/null
+fi
+chmod 600 "$SSH_DIR/id_rsa" 2>/dev/null || true
+if ! grep -qE '^[[:space:]]*Host[[:space:]]+10\.11\.99\.1[[:space:]]*$' "$SSH_CFG" 2>/dev/null; then
+    echo "  - Adding ~/.ssh/config block for the tablet (10.11.99.1)"
+    cat >> "$SSH_CFG" <<'SSHCFG'
+
+Host 10.11.99.1
+    User root
+    HostKeyAlgorithms +ssh-rsa
+    PubkeyAcceptedKeyTypes +ssh-rsa
+    IdentityFile ~/.ssh/id_rsa
+    IdentitiesOnly yes
+    StrictHostKeyChecking accept-new
+SSHCFG
+    chmod 600 "$SSH_CFG"
+fi
+
 # 3. Launcher scripts
 echo "  - Installing scripts to $BIN_DIR"
 mkdir -p "$BIN_DIR"
@@ -110,11 +136,12 @@ cat <<EOF
 
 ==> Host install complete.
 
-Next:
+SSH key (~/.ssh/id_rsa) and the tablet's ~/.ssh/config block are set up.
+
+Next (only when linking a tablet to THIS computer — skip if already streaming):
   1. Enable Developer Mode on the reMarkable Paper Pro (WIPES the device —
      back up / sync to cloud first). Required for SSH.
-  2. Plug the tablet in via USB and set up a passwordless SSH key:
-        ssh-keygen -t rsa           # if you don't have a key yet
+  2. Plug the tablet in via USB and authorize this computer's key:
         ssh-copy-id root@10.11.99.1 # tablet root password: Settings ->
                                     # Help -> Copyrights and licenses (bottom)
   3. Install the streaming server onto the tablet (from this repo):
@@ -122,5 +149,6 @@ Next:
   4. Plug in the tablet: a fullscreen Chrome kiosk opens. Log in ONCE with the
      goMarkableStream credentials; the token then persists ~10 years.
 
+To update later:  git pull && ./install-host.sh   (idempotent).
 See README.md for details and troubleshooting.
 EOF
