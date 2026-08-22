@@ -227,6 +227,7 @@ Progress is logged to `~/remarkable_mirror/.rm-pull.log`.
 | Kiosk stops opening after a while; SSH works but `:2001` is closed; service `not-found` | A tablet **OS update wiped the systemd unit**. The watcher auto-heals via `rm-heal.sh`; or run `rm-heal.sh` / `./setup-tablet.sh` manually. Binary/token survive, so no re-login. |
 | remlink's "Tablet (SSH)" dot is **orange**, or `rm-*` tools can't connect on a new computer | Port 22 is reachable but **this computer's key isn't authorized on the tablet**. Run `ssh-copy-id root@10.11.99.1` once (per computer). The dot turns green only when the key actually logs in. |
 | "Rate limited" on a second computer after updating | A **stale pre-update kiosk** is still open → two viewers. Click **Restart kiosk** in remlink (closes duplicates, opens one), or `pkill -f -- '--user-data-dir=$HOME/.config/remarkable-kiosk'`. Do NOT delete the kiosk profile — that only drops your login. |
+| Service shows `active` but `:2001` never opens; journal ends at "JWT: Loaded secret key" (no "Serving on") | goMarkableStream's framebuffer scan is **hung on a stale xochitl** (seen after firmware updates). `rm-heal.sh` now detects this and restarts xochitl + the service (strokes are saved on a clean stop). Wake the tablet screen if it persists. |
 
 ### Handy tablet commands (over SSH)
 ```bash

@@ -32,6 +32,13 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
    `/home/root` (so no re-login). Symptom = SSH up, stream down. Fix: `rm-heal.sh`
    (re-runs `goMarkableStream install` using the surviving binary); the watcher
    runs it automatically. `/home/root` persists across updates; `/etc` does not.
+8. **"active" service ≠ streaming.** After a firmware update goMarkableStream can
+   start yet hang BEFORE binding `:2001` — its framebuffer scan blocks on a stale
+   xochitl (journal ends at "JWT: Loaded secret key", no "Serving on"). systemd
+   shows `active` the whole time. Fix: `systemctl restart xochitl` then the
+   service (rm-heal.sh does this automatically when `:2001` stays closed). Also:
+   check `:2001` from the HOST (`nc -z`) — the tablet's busybox `ss` does NOT
+   list the IPv6 `[::]:2001` listener, so a tablet-side check reads falsely dead.
 
 ## Files
 - `install-host.sh` — host installer (Chrome, scripts, autostart, desktop icon). Idempotent.
