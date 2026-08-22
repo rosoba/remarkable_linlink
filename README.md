@@ -1,0 +1,136 @@
+# remarkable_linlink
+
+Stream a **reMarkable Paper Pro** screen to an **Ubuntu** computer, with a
+one-click / plug-and-play fullscreen kiosk. Built around
+[goMarkableStream](https://github.com/owulveryck/goMarkableStream).
+
+**What you get:**
+- Plug the tablet into USB → a fullscreen live view of the screen opens automatically.
+- Unplug → the window closes automatically.
+- A desktop icon + app-menu entry for launching manually.
+- No login prompts after a one-time setup; no per-use fiddling.
+
+Tested on: Ubuntu 24.04 (GNOME/Wayland, snap Firefox) + reMarkable Paper Pro
+(codename *Ferrari*, `imx8mm-ferrari`), goMarkableStream v1.4.0.
+
+---
+
+## Why this exists / key facts (read once)
+
+- **reStream does NOT support the Paper Pro.** Its device table only knows rM1/rM2;
+  the Paper Pro reports machine string `reMarkable Ferrari` and has a different,
+  color framebuffer. We use **goMarkableStream** (`RMPRO` build, arm64) instead.
+- **Developer Mode is required for SSH on the Paper Pro, and enabling it FACTORY-RESETS
+  (wipes) the tablet.** Back up / sync to the cloud first. (rM1/rM2 don't need this.)
+- **The stream is HTTPS-only, self-signed, on port 2001.** Plain HTTP returns 400.
+- **JWT auth must stay ENABLED.** Disabling `RK_JWT_ENABLED` does *not* remove auth —
+  the `/funnel` frame endpoint still returns `401`, so the screen stays blank/reconnecting.
+  Instead we keep JWT on and set a 10-year token lifetime, then log in once.
+- **Only ONE viewer at a time.** A second simultaneous connection shows a
+  **"Rate limited"** badge and a blank canvas. (If you see blank + "Rate limited",
+  close the other browser/tab that's viewing the stream.)
+- **Ubuntu's Firefox and Chromium are snaps**, which can't run a clean dedicated
+  kiosk (`--kiosk` only applies when it *starts* the instance; custom-path profiles
+  don't lock properly; PID-kill for auto-close is unreliable). So we use **native
+  Google Chrome** in a dedicated `--user-data-dir` — reliable fullscreen + killable.
+
+---
+
+## Fast track for a NEW computer + NEW tablet
+
+On the **Ubuntu computer**:
+```bash
+git clone <this-repo> ~/Coding/remarkable_linlink
+cd ~/Coding/remarkable_linlink
+./install-host.sh                 # Chrome + scripts + autostart + desktop icon
+```
+
+On the **reMarkable Paper Pro**:
+1. **Enable Developer Mode** (Settings → General → Software / Help). ⚠️ This **wipes
+   the device** — sync/back up first. Set a device password if prompted.
+2. Plug in via USB. Find the SSH root password on the tablet:
+   *Settings → Help → Copyrights and licenses* (scroll to the bottom).
+
+Back on the **computer**:
+```bash
+ssh-keygen -t rsa                 # only if you don't already have a key
+ssh-copy-id root@10.11.99.1       # enter the tablet's root password once
+./setup-tablet.sh                 # installs + configures goMarkableStream over SSH
+```
+
+First plug-in: the kiosk opens, **log in once** (goMarkableStream default is
+`admin` / `password` unless you change it) → done forever after.
+
+That's it. Steps that **cannot** be pre-done for you: enabling Developer Mode and
+the one-time `ssh-copy-id` (needs the tablet password interactively).
+
+---
+
+## What each piece does
+
+| File | Runs on | Purpose |
+|------|---------|---------|
+| `install-host.sh` | Ubuntu | Installs Chrome, the two scripts, the autostart watcher, and the desktop icon. Idempotent. |
+| `setup-tablet.sh` | Ubuntu → tablet (SSH) | Downloads the RMPRO binary, copies it over, installs the systemd service, applies both fixes, restarts. |
+| `scripts/remarkable-stream-watch.sh` | Ubuntu | Background watcher: opens the kiosk on plug-in, closes it on unplug. Autostarted by GNOME. |
+| `scripts/remarkable-stream.sh` | Ubuntu | Manual launcher (desktop icon / app menu). |
+| `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
+
+Installed locations on the host:
+- `~/.local/bin/remarkable-stream*.sh`
+- `~/.config/autostart/remarkable-stream-watch.desktop`
+- `~/Desktop/remarkable-stream.desktop` and `~/.local/share/applications/…`
+- Chrome kiosk profile/token: `~/.config/remarkable-kiosk/`
+
+On the tablet:
+- `/home/root/goMarkableStream` (binary)
+- `/etc/systemd/system/goMarkableStream.service`
+- `/home/root/.config/goMarkableStream/env` (config)
+
+---
+
+## Usage
+
+- **Plug in** → fullscreen live screen (already authenticated).
+- **Unplug** → kiosk closes.
+- **Manual open** → double-click the *reMarkable Stream* desktop icon, or search
+  "reMarkable Stream" in the app grid.
+- **Exit fullscreen** → `Alt+F4`.
+- **Only one viewer at a time** (see key facts).
+
+### Change the tablet login / port
+Edit `/home/root/.config/goMarkableStream/env` on the tablet (uncomment and set
+`RK_SERVER_USERNAME` / `RK_SERVER_PASSWORD`), then
+`systemctl restart goMarkableStream`. Log in again once in the kiosk.
+
+---
+
+## Troubleshooting (hard-won)
+
+| Symptom | Cause / fix |
+|---------|-------------|
+| `Unsupported reMarkable version: reMarkable Ferrari` | You're using reStream. It doesn't support the Paper Pro — use goMarkableStream (this repo). |
+| Service crash-loops, `status=226/NAMESPACE`, log says `.tailscale: No such file or directory` | The unit's `ReadWritePaths=/home/root/.tailscale` points at a missing dir. `mkdir -p /home/root/.tailscale` (setup-tablet.sh does this). |
+| Browser: "Unable to connect" on `10.11.99.1:2001` | You used `http://`. It's **https-only** — use `https://`. |
+| Endless "Reconnecting (attempt n/10)" | Stale cached page after a config change (hard-reload), **or** JWT was disabled (re-enable it), **or** a second viewer is connected. |
+| Blank canvas + **"Rate limited"** badge | Another viewer is connected. Close the other tab/browser — only one at a time. |
+| Blank canvas, no "Rate limited" | Not logged in / token expired → log in again. (WebGL is fine; the flags cover GPU edge cases.) |
+| Firefox "already running, not responding … use a different profile" | snap Firefox + custom profile path. We use native Chrome instead — don't launch the kiosk via snap Firefox. |
+| `ssh` rejects the key (`no matching host key`, RSA "legacy") | Modern OpenSSH treats `ssh-rsa` as legacy. Add to `~/.ssh/config`: `Host 10.11.99.1` / `PubkeyAcceptedKeyTypes=+ssh-rsa` / `HostKeyAlgorithms=+ssh-rsa`. |
+| reMarkable 2 (not Pro) SSH key | rM2 doesn't accept `ed25519` keys — use `rsa`/`ecdsa`. |
+
+### Handy tablet commands (over SSH)
+```bash
+systemctl status goMarkableStream
+journalctl -u goMarkableStream -n 30 --no-pager
+grep -vE '^\s*#' /home/root/.config/goMarkableStream/env   # active settings
+```
+
+---
+
+## Notes for other device variants
+- **reMarkable 1 / 2:** no Developer Mode needed (SSH works out of the box); use the
+  matching goMarkableStream device build (`RM1` / `RM2`) instead of `RMPRO`. The rest
+  (kiosk scripts, one-viewer rule, JWT/token approach) is identical.
+- **Wayland vs X11:** the watcher launches Chrome from the GNOME session (via autostart),
+  so it inherits the display env on both.

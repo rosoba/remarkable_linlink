@@ -1,0 +1,3 @@
+# Cached tablet binary (auto-downloaded by setup-tablet.sh; version-specific)
+bin/gomarkablestream-*
+*.deb
