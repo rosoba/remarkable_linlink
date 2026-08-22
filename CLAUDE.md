@@ -69,7 +69,9 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   The "Tablet (SSH)" dot does a real `ssh … true` auth check (green = key logs in,
   orange = `:22` reachable but key NOT authorized → run `ssh-copy-id`). "Restart
   kiosk" kills all kiosk windows by data-dir + relaunches one via
-  `remarkable-stream.sh` — the fix for "Rate limited" (two viewers). Library counts
+  `remarkable-stream.sh` — the fix for "Rate limited" (two viewers). "Heal service"
+  runs in its own thread (usable even while a sync runs — it's SSH-independent of
+  the pull/render); "Interrupt" stops the running sync. Library counts
   come from `~/.cache/remlink-state.json`, written by the rm-* tools on full runs.
 - `scripts/remlink_index.py` — shared SQLite cache-index (`~/remarkable_mirror/
   .remlink-index.db`). Tools import it via `sys.path.insert(dirname(__file__))`

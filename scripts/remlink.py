@@ -77,13 +77,15 @@ class App:
     def __init__(self, root):
         self.root = root
         root.title("remlink — reMarkable Manager")
-        root.geometry("640x500")
+        root.geometry("980x760")
+        root.minsize(760, 560)
         self.q = queue.Queue()          # (kind, payload) from worker threads
         self.proc = None                # running action subprocess
         self.total = None
         self.done = 0
 
         self.running_category = None     # which library row is mid-task (blue)
+        self.healing = False             # a heal is in flight (independent of proc)
 
         # --- status: two vertical groups side by side ---
         status = ttk.Frame(root)
@@ -114,21 +116,22 @@ class App:
         # --- actions ---
         act = ttk.Frame(root)
         act.pack(fill="x", padx=8, pady=4)
-        self.buttons = []
+        self.buttons = []      # the long-running syncs (disabled while one runs)
         specs = [
             ("Pull now", [_tool("rm-pull.py"), MIRROR_DIR], "Pulling", "pull"),
             ("Render notebooks", [_tool("rm-render.py"), MIRROR_DIR], "Rendering notebooks", "render"),
             ("Render annotations", [_tool("rm-annotate.py"), MIRROR_DIR], "Rendering annotations", "annotate"),
-            ("Heal service", [_tool("rm-heal.sh"), HOST], "Healing service", None),
         ]
         for label, cmd, title, cat in specs:
             b = ttk.Button(act, text=label,
                            command=lambda c=cmd, t=title, k=cat: self.run(c, t, k))
             b.pack(side="left", padx=3)
             self.buttons.append(b)
+        # Heal is independent (tablet service, over SSH) — stays clickable during a sync
+        ttk.Button(act, text="Heal service", command=self.heal).pack(side="left", padx=3)
         ttk.Button(act, text="Restart kiosk", command=self.restart_kiosk).pack(side="left", padx=3)
         ttk.Button(act, text="Open mirror", command=self.open_mirror).pack(side="left", padx=3)
-        self.stop_btn = ttk.Button(act, text="Stop", command=self.stop, state="disabled")
+        self.stop_btn = ttk.Button(act, text="Interrupt", command=self.stop, state="disabled")
         self.stop_btn.pack(side="right", padx=3)
 
         self.counter = ttk.Label(root, text="idle", font=("", 10, "bold"))
@@ -198,6 +201,28 @@ class App:
     def open_mirror(self):
         os.makedirs(MIRROR_DIR, exist_ok=True)
         subprocess.Popen(["xdg-open", MIRROR_DIR])
+
+    def heal(self):
+        """Reinstall the tablet stream service — independent of a running sync."""
+        if self.healing:
+            return
+        self.healing = True
+        self._append("\n$ rm-heal.sh (reinstall tablet stream service)\n")
+        threading.Thread(target=self._heal_worker, daemon=True).start()
+
+    def _heal_worker(self):
+        cmd = [_tool("rm-heal.sh"), HOST]
+        env = dict(os.environ, PYTHONUNBUFFERED="1")
+        try:
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                 text=True, bufsize=1, env=env)
+            for line in p.stdout or []:
+                self.q.put(("line", (line, "Heal")))
+            p.wait()
+            self.q.put(("line", (f"(heal finished, exit {p.returncode})\n", "Heal")))
+        except OSError as e:
+            self.q.put(("line", (f"! heal error: {e}\n", "Heal")))
+        self.healing = False
 
     def restart_kiosk(self):
         """Fix 'Rate limited' by closing ALL kiosk windows, then opening exactly one."""
