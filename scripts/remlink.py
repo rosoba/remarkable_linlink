@@ -48,15 +48,26 @@ def port_open(host, port, timeout=1.5):
         return False
 
 
-def ssh_authorized(host):
-    """True only if our key actually logs in — not just that :22 is reachable."""
+def ssh_status(host):
+    """Why SSH is/isn't usable: 'ok' | 'hostkey' | 'denied' | 'error'.
+
+    Distinguishes a changed host key from an unauthorized key so the hint can point
+    at the right fix (ssh-keygen -R vs ssh-copy-id)."""
     try:
-        return subprocess.run(
+        r = subprocess.run(
             ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=3",
              "-o", "StrictHostKeyChecking=accept-new", f"root@{host}", "true"],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
+            capture_output=True, text=True)
     except OSError:
-        return False
+        return "error"
+    if r.returncode == 0:
+        return "ok"
+    err = (r.stderr or "").lower()
+    if "identification has changed" in err or "host key verification failed" in err:
+        return "hostkey"
+    if "permission denied" in err:
+        return "denied"
+    return "error"
 
 
 def kiosk_running():
@@ -149,15 +160,15 @@ class App:
     def poll_status(self):
         while True:
             ssh = port_open(HOST, SSH_PORT)
-            auth = ssh_authorized(HOST) if ssh else False
+            sstat = ssh_status(HOST) if ssh else "down"
             stream = port_open(HOST, STREAM_PORT)
             conn = {
-                "Tablet (SSH)": GREEN if auth else (ORANGE if ssh else GREY),
+                "Tablet (SSH)": GREEN if sstat == "ok" else (ORANGE if ssh else GREY),
                 "Stream :2001": GREEN if stream else (ORANGE if ssh else GREY),
                 "Kiosk": GREEN if kiosk_running() else GREY,
                 "Service": GREEN if stream else (RED if ssh else GREY),
             }
-            self.q.put(("status", (conn, idx.counts(MIRROR_DIR), ssh, auth, stream)))
+            self.q.put(("status", (conn, idx.counts(MIRROR_DIR), ssh, sstat, stream)))
             time.sleep(3)
 
     # ---- run an action (background) ----
@@ -239,16 +250,20 @@ class App:
             while True:
                 kind, payload = self.q.get_nowait()
                 if kind == "status":
-                    conn, counts, ssh, auth, stream = payload
+                    conn, counts, ssh, sstat, stream = payload
                     for key, color in conn.items():
                         self.conn_dots[key].config(fg=color)
                     self.update_library(counts)
                     if not ssh:
                         hint = "tablet not connected"
-                    elif not auth:
+                    elif sstat == "hostkey":
+                        hint = "tablet host key changed — run:  ssh-keygen -R 10.11.99.1  (or ./install-host.sh)"
+                    elif sstat == "denied":
                         hint = "SSH key not authorized — run:  ssh-copy-id root@10.11.99.1"
+                    elif sstat == "error":
+                        hint = "SSH not responding — wake the tablet / check the cable"
                     elif not stream:
-                        hint = "service down — click Heal"
+                        hint = "stream down — click Heal service"
                     else:
                         hint = "streaming — kiosk should be open"
                     self.hint.config(text=hint)
