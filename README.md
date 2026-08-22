@@ -77,6 +77,7 @@ the one-time `ssh-copy-id` (needs the tablet password interactively).
 | `scripts/rm-pull.py` | Ubuntu → tablet (SSH) | Mirror the library to a local folder (one-way, read-only on the tablet). |
 | `scripts/rm-push.py` | Ubuntu → tablet (SSH) | Upload a PDF/EPUB to the tablet (add-only; never deletes). |
 | `scripts/rm-render.py` | Ubuntu → tablet (SSH) | Export handwritten notebooks to PDF (offline; self-managing venv). |
+| `scripts/rm-annotate.py` | Ubuntu → tablet (SSH) | Export annotated PDFs (source page + your ink, incl. margin notes) to PDF. |
 | `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
 
 Installed locations on the host:
@@ -149,6 +150,25 @@ ink onto the source PDF is a separate job, see [`remarks`](https://github.com/lu
 unknown pen colours fall back to highlighter-yellow and very new brush types may
 render imperfectly. Legibility is generally excellent. It is **on-demand only**
 (not run on plug-in — rendering the whole library is slow).
+
+### Export annotated PDFs → PDF
+
+```bash
+./scripts/rm-annotate.py --list               # list annotated PDFs
+./scripts/rm-annotate.py --name "Vicente"     # export matching docs
+./scripts/rm-annotate.py                        # export ALL into ~/remarkable_mirror
+```
+
+For PDFs you drew *on*, this overlays your ink back onto the source page and
+writes `<name> (annotated).pdf`. reMarkable lets you write in an expandable canvas
+beside the page, so the output uses a **"page + margins"** canvas — margin notes
+appear next to the page instead of being clipped. On-page marks (underlines,
+arrows, circles) land in the right place. Shares the same venv as `rm-render.py`.
+
+Limits (honest): **text highlights** (highlighter over the PDF's own text) are
+*not* rendered — only pen/marker strokes; and **per-page zoom/pan is not applied**,
+so a page you zoomed/panned while writing may be offset. For perfect fidelity
+(incl. highlights) use reMarkable's own email/cloud export.
 
 ### Auto-mirror on plug-in (opt-in)
 

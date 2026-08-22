@@ -46,6 +46,12 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   Paper Pro `HIGHLIGHT` colour id 9 → we patch `RM_PALETTE` to `.get(id, yellow)`.
   rmc's own PDF path uses snap Inkscape (sandboxed, fails) → we go `.rm`→SVG (rmc)
   →PDF (cairosvg, white bg)→merge (pypdf). Pure notebooks only; on-demand.
+- `scripts/rm-annotate.py` — export annotated PDFs (source page + ink overlay).
+  Shares rm-render's venv. Ink frame: PDF fits to width = rmc x∈[±`PAGE_W_PT`/2],
+  y∈[0,`ph/s`]; overlay uses a "page + margins" canvas (union of page + ink extent)
+  so margin notes aren't clipped. On-page + margin ink align well on Paper Pro.
+  NOT handled: text highlights (`GlyphRange`, rmc skips them) and per-page zoom/pan
+  (`customZoom*` in `.content`) — a zoomed page's ink may be offset.
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.
