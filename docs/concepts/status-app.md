@@ -1,6 +1,7 @@
 # Concept: a tiny status/control app for remarkable_linlink
 
-**Status:** phase 1 built → `scripts/rm-status.py` (launch: "reMarkable Status").
+**Status:** phase 1 built → `scripts/remlink.py`, installed as the `remlink`
+command + app entry, and opened on plug-in by the watcher.
 **Verdict:** low–moderate effort, worth it. Phase 2 (below) still open.
 
 ## Goal

@@ -75,7 +75,8 @@ install -m 755 "$REPO_DIR/scripts/rm-push.py"                 "$BIN_DIR/rm-push.
 install -m 755 "$REPO_DIR/scripts/rm-render.py"               "$BIN_DIR/rm-render.py"
 install -m 755 "$REPO_DIR/scripts/rm-annotate.py"            "$BIN_DIR/rm-annotate.py"
 install -m 755 "$REPO_DIR/scripts/rm-heal.sh"                "$BIN_DIR/rm-heal.sh"
-install -m 755 "$REPO_DIR/scripts/rm-status.py"              "$BIN_DIR/rm-status.py"
+install -m 755 "$REPO_DIR/scripts/remlink.py"               "$BIN_DIR/remlink"
+rm -f "$BIN_DIR/rm-status.py"   # clean up the pre-rename name, if present
 
 # 4. Autostart entry (starts the plug-in watcher with the GNOME session)
 echo "  - Installing autostart watcher to $AUTOSTART_DIR"
@@ -112,15 +113,16 @@ desktop_file_contents > "$APPS_DIR/remarkable-stream.desktop"
 chmod +x "$DESKTOP_DIR/remarkable-stream.desktop"
 gio set "$DESKTOP_DIR/remarkable-stream.desktop" metadata::trusted true 2>/dev/null || true
 
-# 5b. Status/control app (app-menu entry)
-echo "  - Installing status app entry to $APPS_DIR"
-cat > "$APPS_DIR/remarkable-status.desktop" <<EOF
+# 5b. remlink manager (app-menu entry)
+echo "  - Installing remlink app entry to $APPS_DIR"
+rm -f "$APPS_DIR/remarkable-status.desktop"   # clean up the pre-rename entry
+cat > "$APPS_DIR/remlink.desktop" <<EOF
 [Desktop Entry]
 Version=1.0
 Type=Application
-Name=reMarkable Status
-Comment=Link status + run pull / render / heal
-Exec=$BIN_DIR/rm-status.py
+Name=remlink
+Comment=reMarkable link manager — status + pull / render / heal
+Exec=$BIN_DIR/remlink
 Icon=utilities-system-monitor
 Terminal=false
 Categories=Utility;

@@ -30,6 +30,9 @@ HEAL_BIN="$HOME/.local/bin/rm-heal.sh"
 SSH_PORT=22
 HEAL_LOG="$HOME/.cache/remarkable-heal.log"
 
+# The remlink manager window — opened on plug-in too (singleton: never duplicated).
+REMLINK_BIN="$HOME/.local/bin/remlink"
+
 # Kill any kiosk Chrome using our data dir. This is how we both close on unplug
 # AND avoid a second viewer: relaunching Chrome with an existing data dir would
 # just open another window in the same instance -> two stream connections ->
@@ -60,6 +63,13 @@ pull_mirror() {
     "$PULL_BIN" "$MIRROR_DIR" --host "$HOST" >>"$MIRROR_DIR/.rm-pull.log" 2>&1 &
 }
 
+launch_manager() {
+    # open the remlink window on plug-in, but only one instance ever
+    [ -x "$REMLINK_BIN" ] || return 0
+    pgrep -f "$REMLINK_BIN" >/dev/null 2>&1 && return 0
+    "$REMLINK_BIN" >/dev/null 2>&1 &
+}
+
 prev="down"     # last known state, so we only act on transitions (edges)
 healed="false"  # heal at most once per connection (reset on unplug / when healthy)
 
@@ -87,6 +97,7 @@ while true; do
     if [ "$state" = "up" ] && [ "$prev" = "down" ]; then
         launch_kiosk    # tablet plugged in -> open the stream fullscreen
         pull_mirror     # ...and mirror PDFs/EPUBs locally, if enabled
+        launch_manager  # ...and open the remlink manager (singleton)
     elif [ "$state" = "down" ] && [ "$prev" = "up" ]; then
         kill_kiosk      # tablet unplugged -> close the kiosk
     fi

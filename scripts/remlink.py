@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
-"""rm-status.py — tiny status/control panel for remarkable_linlink (phase 1).
+"""remlink — tiny status/control panel for remarkable_linlink (phase 1).
 
 A thin Tkinter front-end over the rm-* CLIs. It shows the link state at a glance
 and runs the workflows by button — it holds NO logic of its own, it just shells
 out and parses the tools' stdout for progress. See docs/concepts/status-app.md.
 
 Requires python3-tk (install-host.sh installs it). Launches from the app grid as
-"reMarkable Status".
+"remlink", by the `remlink` command, or automatically on USB plug-in.
 """
 import os
 import queue
@@ -71,7 +71,7 @@ def mirror_stats():
 class App:
     def __init__(self, root):
         self.root = root
-        root.title("reMarkable Status")
+        root.title("remlink — reMarkable Manager")
         root.geometry("640x500")
         self.q = queue.Queue()          # (kind, payload) from worker threads
         self.proc = None                # running action subprocess
