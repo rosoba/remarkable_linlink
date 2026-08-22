@@ -32,6 +32,11 @@ if ! command -v nc >/dev/null 2>&1; then
     echo "  - Installing netcat (needs sudo)..."
     sudo apt-get install -y netcat-openbsd
 fi
+# python3-tk: needed only by the optional status app (rm-status.py)
+if ! python3 -c 'import tkinter' >/dev/null 2>&1; then
+    echo "  - Installing python3-tk (for the status app; needs sudo)..."
+    sudo apt-get install -y python3-tk
+fi
 
 # 3. Launcher scripts
 echo "  - Installing scripts to $BIN_DIR"
@@ -44,6 +49,7 @@ install -m 755 "$REPO_DIR/scripts/rm-push.py"                 "$BIN_DIR/rm-push.
 install -m 755 "$REPO_DIR/scripts/rm-render.py"               "$BIN_DIR/rm-render.py"
 install -m 755 "$REPO_DIR/scripts/rm-annotate.py"            "$BIN_DIR/rm-annotate.py"
 install -m 755 "$REPO_DIR/scripts/rm-heal.sh"                "$BIN_DIR/rm-heal.sh"
+install -m 755 "$REPO_DIR/scripts/rm-status.py"              "$BIN_DIR/rm-status.py"
 
 # 4. Autostart entry (starts the plug-in watcher with the GNOME session)
 echo "  - Installing autostart watcher to $AUTOSTART_DIR"
@@ -79,6 +85,20 @@ desktop_file_contents > "$DESKTOP_DIR/remarkable-stream.desktop"
 desktop_file_contents > "$APPS_DIR/remarkable-stream.desktop"
 chmod +x "$DESKTOP_DIR/remarkable-stream.desktop"
 gio set "$DESKTOP_DIR/remarkable-stream.desktop" metadata::trusted true 2>/dev/null || true
+
+# 5b. Status/control app (app-menu entry)
+echo "  - Installing status app entry to $APPS_DIR"
+cat > "$APPS_DIR/remarkable-status.desktop" <<EOF
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=reMarkable Status
+Comment=Link status + run pull / render / heal
+Exec=$BIN_DIR/rm-status.py
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Utility;
+EOF
 update-desktop-database "$APPS_DIR" 2>/dev/null || true
 
 # 6. Start the watcher now (so you don't have to log out first)

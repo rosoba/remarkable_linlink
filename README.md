@@ -85,6 +85,7 @@ the one-time `ssh-copy-id` (needs the tablet password interactively).
 | `scripts/rm-render.py` | Ubuntu → tablet (SSH) | Export handwritten notebooks to PDF (offline; self-managing venv). |
 | `scripts/rm-annotate.py` | Ubuntu → tablet (SSH) | Export annotated PDFs (source page + your ink, incl. margin notes) to PDF. |
 | `scripts/rm-heal.sh` | Ubuntu → tablet (SSH) | Reinstall the stream service after a tablet OS update (auto-run by the watcher). |
+| `scripts/rm-status.py` | Ubuntu | Tiny GUI ("reMarkable Status"): link state + buttons for pull / render / heal. |
 | `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
 
 Installed locations on the host:

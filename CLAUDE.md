@@ -62,6 +62,10 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   reusing the surviving `/home/root` binary. Watcher runs it when `:22` up + `:2001`
   down; also runnable by hand. Distinct from `setup-tablet.sh` (which re-copies the
   binary and is for first-time install).
+- `scripts/rm-status.py` — tiny Tkinter status/control app (phase 1). Thin wrapper
+  over the rm-* CLIs (parses their stdout for progress); holds NO logic. Status
+  dots derive from `:22`/`:2001` (no SSH latency). Needs `python3-tk`. Design +
+  roadmap: `docs/concepts/status-app.md`.
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.

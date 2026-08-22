@@ -1,6 +1,7 @@
 # Concept: a tiny status/control app for remarkable_linlink
 
-**Status:** analysis / not yet built. **Verdict:** low–moderate effort, worth it.
+**Status:** phase 1 built → `scripts/rm-status.py` (launch: "reMarkable Status").
+**Verdict:** low–moderate effort, worth it. Phase 2 (below) still open.
 
 ## Goal
 
