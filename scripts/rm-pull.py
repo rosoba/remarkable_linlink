@@ -21,8 +21,28 @@ import re
 import subprocess
 import sys
 import tarfile
+import time
 
 DATA_DIR = "/home/root/.local/share/remarkable/xochitl"
+STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
+
+
+def write_state(section, data):
+    """Merge one section into the shared remlink state file (best-effort)."""
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        st = {}
+        if os.path.exists(STATE_FILE):
+            try:
+                st = json.load(open(STATE_FILE))
+            except (json.JSONDecodeError, OSError):
+                st = {}
+        st[section] = {**data, "ts": int(time.time())}
+        tmp = STATE_FILE + ".tmp"
+        json.dump(st, open(tmp, "w"))
+        os.replace(tmp, STATE_FILE)
+    except OSError:
+        pass
 
 
 def ssh(host, cmd, capture=True, binary=False):
@@ -50,10 +70,15 @@ def main():
     # 1. Remote file listing with sizes (single ssh) -> {name: size}
     listing = ssh(args.host, f"cd {DATA_DIR} && ls -la")
     sizes = {}
+    dirs = set()                       # uuids that have a page dir (i.e. hold .rm ink)
     for line in listing.splitlines():
         parts = line.split(None, 8)
-        if len(parts) == 9 and not parts[0].startswith("d"):
-            sizes[parts[8]] = int(parts[4])
+        if len(parts) == 9:
+            if parts[0].startswith("d"):
+                if parts[8] not in (".", ".."):
+                    dirs.add(parts[8])
+            else:
+                sizes[parts[8]] = int(parts[4])
 
     # 2. All .metadata files in one tar stream (small; single ssh)
     tar_bytes = ssh(args.host, f"cd {DATA_DIR} && tar cf - *.metadata", binary=True)
@@ -118,6 +143,10 @@ def main():
         with open(os.path.join(args.dest, "_notebooks-not-exported.txt"), "w") as f:
             f.write("Handwritten notebooks (no PDF/EPUB original) — not exported:\n\n")
             f.write("\n".join(sorted(notebooks)) + "\n")
+
+    annotated_total = sum(1 for d in docs if d[0] in dirs)   # originals that also hold ink
+    write_state("pull", {"originals": len(docs), "notebooks_total": len(notebooks),
+                         "annotated_total": annotated_total})
 
     print(f"\n==> done: {copied} copied, {skipped} unchanged, "
           f"{len(notebooks)} notebooks skipped (see _notebooks-not-exported.txt)")

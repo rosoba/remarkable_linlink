@@ -8,12 +8,14 @@ out and parses the tools' stdout for progress. See docs/concepts/status-app.md.
 Requires python3-tk (install-host.sh installs it). Launches from the app grid as
 "remlink", by the `remlink` command, or automatically on USB plug-in.
 """
+import json
 import os
 import queue
 import re
 import socket
 import subprocess
 import threading
+import time
 import tkinter as tk
 from tkinter import ttk, scrolledtext
 
@@ -22,8 +24,18 @@ STREAM_PORT = 2001
 SSH_PORT = 22
 KIOSK_DIR = os.path.expanduser("~/.config/remarkable-kiosk")
 MIRROR_DIR = os.path.expanduser("~/remarkable_mirror")
+STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
 
-GREEN, RED, GREY, ORANGE = "#2e7d32", "#c62828", "#9e9e9e", "#ef6c00"
+# green=done/healthy, red=none/down, orange=partial/needs-heal, blue=processing, grey=unknown
+GREEN, RED, GREY, ORANGE, BLUE = "#2e7d32", "#c62828", "#9e9e9e", "#ef6c00", "#1565c0"
+
+
+def load_state():
+    """The bookkeeping the rm-* tools leave behind (counts + timestamps)."""
+    try:
+        return json.load(open(STATE_FILE))
+    except (OSError, json.JSONDecodeError):
+        return {}
 
 
 def _tool(name):
@@ -56,18 +68,6 @@ def kiosk_running():
     return False
 
 
-def mirror_stats():
-    pdfs = 0
-    for _root, _dirs, files in os.walk(MIRROR_DIR):
-        pdfs += sum(1 for f in files if f.lower().endswith(".pdf"))
-    listed = 0
-    nb = os.path.join(MIRROR_DIR, "_notebooks-not-exported.txt")
-    if os.path.exists(nb):
-        with open(nb) as f:
-            listed = sum(1 for ln in f if ln.strip() and "/" in ln)
-    return pdfs, listed
-
-
 class App:
     def __init__(self, root):
         self.root = root
@@ -78,29 +78,47 @@ class App:
         self.total = None
         self.done = 0
 
-        # --- status strip ---
-        top = ttk.LabelFrame(root, text="Status")
-        top.pack(fill="x", padx=8, pady=(8, 4))
-        self.dots = {}
-        for i, key in enumerate(("Tablet (SSH)", "Stream :2001", "Kiosk", "Service")):
-            ttk.Label(top, text="●", foreground=GREY, font=("", 12)).grid(row=0, column=2 * i, padx=(8, 2), pady=6)
-            self.dots[key] = top.grid_slaves(row=0, column=2 * i)[0]
-            ttk.Label(top, text=key).grid(row=0, column=2 * i + 1, padx=(0, 6))
-        self.mirror_lbl = ttk.Label(top, text="Mirror: …")
-        self.mirror_lbl.grid(row=1, column=0, columnspan=8, sticky="w", padx=8, pady=(0, 6))
+        self.running_category = None     # which library row is mid-task (blue)
+
+        # --- status: two vertical groups side by side ---
+        status = ttk.Frame(root)
+        status.pack(fill="x", padx=8, pady=(8, 4))
+
+        conn = ttk.LabelFrame(status, text="Connection")
+        conn.pack(side="left", fill="both", expand=True, padx=(0, 4))
+        self.conn_dots = {}
+        for key in ("Tablet (SSH)", "Stream :2001", "Kiosk", "Service"):
+            row = ttk.Frame(conn); row.pack(fill="x", padx=6, pady=1, anchor="w")
+            dot = tk.Label(row, text="●", fg=GREY, font=("", 12)); dot.pack(side="left")
+            ttk.Label(row, text=key).pack(side="left", padx=(4, 0))
+            self.conn_dots[key] = dot
+
+        lib = ttk.LabelFrame(status, text="Library (bookkept)")
+        lib.pack(side="left", fill="both", expand=True, padx=(4, 0))
+        self.lib_rows = {}
+        for key in ("PDFs", "Notebooks", "Annotated"):
+            row = ttk.Frame(lib); row.pack(fill="x", padx=6, pady=1, anchor="w")
+            dot = tk.Label(row, text="●", fg=GREY, font=("", 12)); dot.pack(side="left")
+            ttk.Label(row, text=key, width=10, anchor="w").pack(side="left", padx=(4, 0))
+            val = tk.Label(row, text="—"); val.pack(side="left")
+            self.lib_rows[key] = (dot, val)
+
+        self.hint = ttk.Label(root, text="", foreground=GREY)
+        self.hint.pack(anchor="w", padx=10)
 
         # --- actions ---
         act = ttk.Frame(root)
         act.pack(fill="x", padx=8, pady=4)
         self.buttons = []
         specs = [
-            ("Pull now", lambda: self.run([_tool("rm-pull.py"), MIRROR_DIR], "Pulling")),
-            ("Render notebooks", lambda: self.run([_tool("rm-render.py"), MIRROR_DIR], "Rendering notebooks")),
-            ("Render annotations", lambda: self.run([_tool("rm-annotate.py"), MIRROR_DIR], "Rendering annotations")),
-            ("Heal service", lambda: self.run([_tool("rm-heal.sh"), HOST], "Healing service")),
+            ("Pull now", [_tool("rm-pull.py"), MIRROR_DIR], "Pulling", "pull"),
+            ("Render notebooks", [_tool("rm-render.py"), MIRROR_DIR], "Rendering notebooks", "render"),
+            ("Render annotations", [_tool("rm-annotate.py"), MIRROR_DIR], "Rendering annotations", "annotate"),
+            ("Heal service", [_tool("rm-heal.sh"), HOST], "Healing service", None),
         ]
-        for label, cmd in specs:
-            b = ttk.Button(act, text=label, command=cmd)
+        for label, cmd, title, cat in specs:
+            b = ttk.Button(act, text=label,
+                           command=lambda c=cmd, t=title, k=cat: self.run(c, t, k))
             b.pack(side="left", padx=3)
             self.buttons.append(b)
         ttk.Button(act, text="Open mirror", command=self.open_mirror).pack(side="left", padx=3)
@@ -120,28 +138,27 @@ class App:
 
     # ---- status polling (background) ----
     def poll_status(self):
-        import time
         while True:
             ssh = port_open(HOST, SSH_PORT)
             stream = port_open(HOST, STREAM_PORT)
-            st = {
+            conn = {
                 "Tablet (SSH)": GREEN if ssh else GREY,
                 "Stream :2001": GREEN if stream else (ORANGE if ssh else GREY),
                 "Kiosk": GREEN if kiosk_running() else GREY,
                 "Service": GREEN if stream else (RED if ssh else GREY),
             }
-            pdfs, listed = mirror_stats()
-            self.q.put(("status", (st, pdfs, listed, ssh, stream)))
+            self.q.put(("status", (conn, load_state(), ssh, stream)))
             time.sleep(3)
 
     # ---- run an action (background) ----
-    def run(self, cmd, title):
+    def run(self, cmd, title, category=None):
         if self.proc is not None:
             return
         if not os.path.exists(cmd[0]):
             self._append(f"! tool not found: {cmd[0]}\n")
             return
         self.total, self.done = None, 0
+        self.running_category = category
         self.counter.config(text=f"{title}…")
         for b in self.buttons:
             b.config(state="disabled")
@@ -181,12 +198,13 @@ class App:
             while True:
                 kind, payload = self.q.get_nowait()
                 if kind == "status":
-                    st, pdfs, listed, ssh, stream = payload
-                    for key, color in st.items():
-                        self.dots[key].config(foreground=color)
-                    hint = "" if stream else (" — needs heal" if ssh else " — unplugged")
-                    self.mirror_lbl.config(
-                        text=f"Mirror: {pdfs} PDFs · {listed} notebooks listed{hint}")
+                    conn, state, ssh, stream = payload
+                    for key, color in conn.items():
+                        self.conn_dots[key].config(fg=color)
+                    self.update_library(state)
+                    self.hint.config(text=("streaming — kiosk should be open" if stream
+                                           else "service down — click Heal" if ssh
+                                           else "tablet not connected"))
                 elif kind == "line":
                     line, title = payload
                     self._append(line)
@@ -198,9 +216,36 @@ class App:
                     for b in self.buttons:
                         b.config(state="normal")
                     self.stop_btn.config(state="disabled")
+                    self.running_category = None
+                    self.update_library(load_state())     # reflect what the tool just wrote
         except queue.Empty:
             pass
         self.root.after(120, self.drain)
+
+    def update_library(self, state):
+        pull = state.get("pull", {})
+        render = state.get("render", {})
+        anno = state.get("annotate", {})
+        self._lib("PDFs", pull.get("originals"), None, "pull")
+        nb = (render.get("done", 0) + render.get("present", 0)) if render else None
+        self._lib("Notebooks", nb, pull.get("notebooks_total"), "render")
+        an = (anno.get("done", 0) + anno.get("present", 0)) if anno else None
+        self._lib("Annotated", an, pull.get("annotated_total"), "annotate")
+
+    def _lib(self, key, done, total, category):
+        dot, val = self.lib_rows[key]
+        if self.running_category == category:
+            dot.config(fg=BLUE); val.config(text="processing…"); return
+        if total is None:                       # a plain count (PDFs mirrored)
+            dot.config(fg=GREY if not done else GREEN)
+            val.config(text="—" if done is None else str(done))
+            return
+        if done is None:                        # this tool has never run
+            dot.config(fg=GREY); val.config(text=f"0/{total}" if total else "—")
+            return
+        val.config(text=f"{done}/{total}")
+        dot.config(fg=GREEN if (total == 0 or done >= total)
+                   else RED if done == 0 else ORANGE)
 
     def _progress(self, line, title):
         m = re.search(r"==>\s+(?:rendering|exporting)\s+(\d+)", line)

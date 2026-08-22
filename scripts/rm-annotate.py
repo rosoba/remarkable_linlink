@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 DATA_DIR = "/home/root/.local/share/remarkable/xochitl"
 VENV = os.path.expanduser("~/.config/remarkable-linlink/rmvenv")
@@ -38,6 +39,25 @@ PKGS = ["rmc", "cairosvg", "pypdf"]
 SCALE = 72.0 / 226.0          # rmc: points per reMarkable screen unit
 PAGE_W_PT = 1404 * SCALE      # rM screen width in rmc points; PDFs fit to this
 HALF = PAGE_W_PT / 2
+STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
+
+
+def write_state(section, data):
+    """Merge one section into the shared remlink state file (best-effort)."""
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        st = {}
+        if os.path.exists(STATE_FILE):
+            try:
+                st = json.load(open(STATE_FILE))
+            except (json.JSONDecodeError, OSError):
+                st = {}
+        st[section] = {**data, "ts": int(time.time())}
+        tmp = STATE_FILE + ".tmp"
+        json.dump(st, open(tmp, "w"))
+        os.replace(tmp, STATE_FILE)
+    except OSError:
+        pass
 
 
 def patch_rmc_palette():
@@ -218,6 +238,8 @@ def main():
         except Exception as e:              # noqa: BLE001
             fail += 1
             print(f"  ! {rel}: {e}")
+    if not args.name:      # only a full run reflects the true totals
+        write_state("annotate", {"done": ok, "present": skip, "failed": fail, "total": len(todo)})
     print(f"\n==> done: {ok} exported, {skip} already present, {fail} failed")
 
 

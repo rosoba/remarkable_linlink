@@ -29,10 +29,30 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 
 DATA_DIR = "/home/root/.local/share/remarkable/xochitl"
 VENV = os.path.expanduser("~/.config/remarkable-linlink/rmvenv")
 PKGS = ["rmc", "cairosvg", "pypdf"]
+STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
+
+
+def write_state(section, data):
+    """Merge one section into the shared remlink state file (best-effort)."""
+    try:
+        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
+        st = {}
+        if os.path.exists(STATE_FILE):
+            try:
+                st = json.load(open(STATE_FILE))
+            except (json.JSONDecodeError, OSError):
+                st = {}
+        st[section] = {**data, "ts": int(time.time())}
+        tmp = STATE_FILE + ".tmp"
+        json.dump(st, open(tmp, "w"))
+        os.replace(tmp, STATE_FILE)
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -207,6 +227,8 @@ def main():
         except Exception as e:              # noqa: BLE001 - keep going on one bad notebook
             fail += 1
             print(f"  ! {rel}: {e}")
+    if not args.name:      # only a full run reflects the true totals
+        write_state("render", {"done": ok, "present": skip, "failed": fail, "total": len(todo)})
     print(f"\n==> done: {ok} rendered, {skip} already present, {fail} failed")
 
 
