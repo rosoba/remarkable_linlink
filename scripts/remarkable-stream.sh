@@ -20,16 +20,19 @@ for _ in $(seq 1 30); do
         # Native Chrome in a dedicated data dir = a separate kiosk that persists
         # its own login token. The GPU flags are a portability safety net so
         # WebGL renders even where hardware WebGL is blocklisted/broken.
-        # --start-fullscreen backs up --kiosk; --ozone-platform-hint=auto makes
-        # Chrome a native Wayland client on Wayland (covers the GNOME bar + dock).
+        # Plain `--kiosk URL` (positional), NOT --app=URL: on GNOME/X11 an app
+        # window under --kiosk becomes a MAXIMIZED decorated window (panels stay);
+        # --kiosk gives true fullscreen. --ozone-platform-hint=auto = native
+        # Wayland on Wayland, X11 on X11.
         exec google-chrome \
             --user-data-dir="$DATA_DIR" \
-            --kiosk --start-fullscreen --app="$URL" \
+            --kiosk \
             --ozone-platform-hint=auto \
             --ignore-certificate-errors --test-type \
             --ignore-gpu-blocklist --enable-unsafe-swiftshader \
             --no-first-run --no-default-browser-check \
-            --password-store=basic --disable-session-crashed-bubble
+            --password-store=basic --disable-session-crashed-bubble \
+            "$URL"
     fi
     sleep 1
 done

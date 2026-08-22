@@ -47,17 +47,19 @@ launch_kiosk() {
     sleep 1
     google-chrome \
         --user-data-dir="$DATA_DIR" \
-        --kiosk --start-fullscreen --app="$URL" \
+        --kiosk \
         --ozone-platform-hint=auto \
         --ignore-certificate-errors --test-type \
         --ignore-gpu-blocklist --enable-unsafe-swiftshader \
         --no-first-run --no-default-browser-check \
         --password-store=basic --disable-session-crashed-bubble \
+        "$URL" \
         >/dev/null 2>&1 &
 }
-# --start-fullscreen backs up --kiosk; --ozone-platform-hint=auto makes Chrome run
-# as a NATIVE Wayland client on Wayland sessions (Ubuntu 24.04 default), where it
-# reliably covers the GNOME top bar + dock. On X11 it resolves to X11 (no change).
+# Use `--kiosk URL` with a POSITIONAL url, NOT `--app=URL`: on GNOME/X11 an app
+# window under --kiosk degrades to a MAXIMIZED, decorated window (title bar + the
+# top bar/dock stay visible). Plain --kiosk gives true _NET_WM_STATE_FULLSCREEN.
+# --ozone-platform-hint=auto = native Wayland on Wayland sessions, X11 on X11.
 
 pull_mirror() {
     # opt-in guards: enabled only when both the dir and the tool are present

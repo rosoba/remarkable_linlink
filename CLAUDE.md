@@ -101,11 +101,18 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   races the live app and can propagate deletes onto the tablet.
 
 ## Kiosk fullscreen
-- Launchers pass `--kiosk --start-fullscreen --ozone-platform-hint=auto`. On **X11**
-  `--kiosk` fully covers the GNOME top bar + dock. On **Wayland** (Ubuntu 24.04
-  default) XWayland `--kiosk` can leave the panels showing; `--ozone-platform-hint=auto`
-  runs Chrome as a native Wayland client, which covers them. Fallback: log in on
-  Ubuntu-on-Xorg, or F11. The letterbox bars inside (portrait tablet on landscape
+- Launch with **`--kiosk <URL>` (positional), NOT `--app=<URL>`.** With `--app`,
+  `--kiosk` degrades to a MAXIMIZED, *decorated* window on GNOME/X11 — title bar +
+  GNOME top bar + dock all stay visible (verified: `_NET_WM_STATE_MAXIMIZED_*` at
+  132,64). Plain `--kiosk URL` gives true `_NET_WM_STATE_FULLSCREEN` at 0,0 filling
+  the whole screen. This was the long-standing "kiosk won't go fullscreen" cause —
+  it was the `--app` flag, not Wayland.
+- `--ozone-platform-hint=auto` = native Wayland on Wayland sessions (covers panels
+  there too), X11 on X11 (no change). Fallbacks if a session still won't cover:
+  Ubuntu-on-Xorg login, or F11.
+- Debug window state with `xprop -id <wid> _NET_WM_STATE` + `xwininfo` (x11-utils);
+  find `<wid>` via `xwininfo -root -tree | grep goMarkableStream`.
+- The letterbox bars *inside* the fullscreen (portrait tablet on a landscape
   monitor) are geometric — only a portrait display removes them.
 
 ## If asked to extend
