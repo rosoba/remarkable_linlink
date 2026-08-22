@@ -34,6 +34,14 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
 - `scripts/remarkable-stream-watch.sh` — plug/unplug watcher (poll `nc -z 10.11.99.1 2001`,
   edge-triggered; opens kiosk on up, kills it on down).
 - `scripts/remarkable-stream.sh` — manual launcher (30s wait-for-tablet, then kiosk).
+- `scripts/rm-pull.py` — wired library mirror (tablet→local, read-only on tablet).
+  Rebuilds the real folder/name tree from each `.metadata` (`parent` UUIDs); copies
+  original PDFs/EPUBs only. Handwritten `.rm` notebooks are listed, not exported.
+- `scripts/rm-push.py` — wired upload (add-only): writes `<uuid>.{pdf,metadata,content}`
+  then `systemctl restart xochitl`. Never deletes.
+- Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
+  exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
+  races the live app and can propagate deletes onto the tablet.
 
 ## If asked to extend
 - Support rM1/rM2: same scripts; change tablet binary to `RM1`/`RM2`; skip Developer Mode.

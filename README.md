@@ -72,8 +72,10 @@ the one-time `ssh-copy-id` (needs the tablet password interactively).
 |------|---------|---------|
 | `install-host.sh` | Ubuntu | Installs Chrome, the two scripts, the autostart watcher, and the desktop icon. Idempotent. |
 | `setup-tablet.sh` | Ubuntu → tablet (SSH) | Downloads the RMPRO binary, copies it over, installs the systemd service, applies both fixes, restarts. |
-| `scripts/remarkable-stream-watch.sh` | Ubuntu | Background watcher: opens the kiosk on plug-in, closes it on unplug. Autostarted by GNOME. |
+| `scripts/remarkable-stream-watch.sh` | Ubuntu | Background watcher: opens the kiosk on plug-in, closes it on unplug (and mirrors PDFs if enabled). Autostarted by GNOME. |
 | `scripts/remarkable-stream.sh` | Ubuntu | Manual launcher (desktop icon / app menu). |
+| `scripts/rm-pull.py` | Ubuntu → tablet (SSH) | Mirror the library to a local folder (one-way, read-only on the tablet). |
+| `scripts/rm-push.py` | Ubuntu → tablet (SSH) | Upload a PDF/EPUB to the tablet (add-only; never deletes). |
 | `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
 
 Installed locations on the host:
@@ -102,6 +104,49 @@ On the tablet:
 Edit `/home/root/.config/goMarkableStream/env` on the tablet (uncomment and set
 `RK_SERVER_USERNAME` / `RK_SERVER_PASSWORD`), then
 `systemctl restart goMarkableStream`. Log in again once in the kiosk.
+
+---
+
+## Local file management (wired, no cloud)
+
+reMarkable only offers cloud sync (with no Linux desktop app), so we manage files
+directly over the same USB/SSH link. Two tools (also installed to `~/.local/bin`):
+
+```bash
+# Pull: mirror the whole library to a local folder tree with real names.
+# ONE-WAY, read-only on the tablet -> it can never alter or delete tablet content.
+# Incremental (skips unchanged), so it's safe to re-run.
+./scripts/rm-pull.py ~/remarkable_mirror
+
+# Push: add a PDF/EPUB to the tablet. ADD-ONLY -> never touches existing docs.
+./scripts/rm-push.py paper.pdf                 # to the library root
+./scripts/rm-push.py paper.pdf -f "Reading"    # into a top-level folder (created if absent)
+```
+
+**Requires** passwordless SSH to the tablet from this host (the `Host 10.11.99.1`
+block in `~/.ssh/config` with `PubkeyAcceptedKeyTypes +ssh-rsa`; see setup).
+
+**Handwritten notebooks are not exported.** They live in reMarkable's `.rm` lines
+format, not PDF; `rm-pull.py` lists them in `_notebooks-not-exported.txt`. Rendering
+them to PDF needs a renderer that supports the Paper Pro (color) format.
+
+### Auto-mirror on plug-in (opt-in)
+
+The watcher mirrors the library each time you plug the tablet in — but only if the
+mirror directory exists. Enable it once:
+
+```bash
+mkdir -p ~/remarkable_mirror
+```
+
+To use a different location, set `REMARKABLE_MIRROR_DIR` in the autostart entry.
+Progress is logged to `~/remarkable_mirror/.rm-pull.log`.
+
+> **Do NOT point Unison / bidirectional sync at the tablet.** The on-device store
+> is a live app database of interdependent UUID files; two-way sync races with
+> `xochitl`, can propagate deletions onto the tablet (bypassing its trash), and
+> wouldn't capture handwriting anyway. One-way pull (backup) + add-only push is
+> the safe pattern. If you must automate, only ever sync tablet → local.
 
 ---
 
