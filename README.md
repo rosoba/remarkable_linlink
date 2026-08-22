@@ -155,6 +155,12 @@ reMarkable's `.rm` lines format, not PDF, so `rm-pull.py` only lists them in
 ./scripts/rm-render.py                         # render ALL into ~/remarkable_mirror
 ```
 
+A small cache-index (`~/remarkable_mirror/.remlink-index.db`, SQLite) records what
+was rendered and the tablet `lastModified` it came from, so a re-run **re-renders
+only notebooks you've edited on the tablet** (not everything) and remlink can show
+accurate done/total counts. It's a pure cache — delete it and the tools fall back
+to "skip if the output exists"; the next `rm-pull` rebuilds it.
+
 Renders the `.rm` pages (including the Paper Pro's **v6 colour** format) to PDF,
 entirely offline, and drops each into the mirror tree next to the pulled PDFs.
 Read-only on the tablet. On first run it builds a private venv (`rmc`, `rmscene`,

@@ -21,28 +21,11 @@ import re
 import subprocess
 import sys
 import tarfile
-import time
 
 DATA_DIR = "/home/root/.local/share/remarkable/xochitl"
-STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
 
-
-def write_state(section, data):
-    """Merge one section into the shared remlink state file (best-effort)."""
-    try:
-        os.makedirs(os.path.dirname(STATE_FILE), exist_ok=True)
-        st = {}
-        if os.path.exists(STATE_FILE):
-            try:
-                st = json.load(open(STATE_FILE))
-            except (json.JSONDecodeError, OSError):
-                st = {}
-        st[section] = {**data, "ts": int(time.time())}
-        tmp = STATE_FILE + ".tmp"
-        json.dump(st, open(tmp, "w"))
-        os.replace(tmp, STATE_FILE)
-    except OSError:
-        pass
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import remlink_index as idx  # noqa: E402
 
 
 def ssh(host, cmd, capture=True, binary=False):
@@ -117,36 +100,44 @@ def main():
         rel = path_of(uuid)
         if rel is None:            # in trash or under a deleted/trashed folder
             continue
+        mod = n.get("lastModified")
         ext = "pdf" if f"{uuid}.pdf" in sizes else ("epub" if f"{uuid}.epub" in sizes else None)
         if ext:
-            docs.append((uuid, ext, os.path.join(*rel[:-1]) if len(rel) > 1 else "", rel[-1]))
+            docs.append((uuid, ext, os.path.join(*rel[:-1]) if len(rel) > 1 else "", rel[-1], mod))
         else:
-            notebooks.append(os.path.join(*rel))
+            notebooks.append((uuid, os.path.join(*rel), rel[-1], mod))
 
     # 4. Copy originals, skipping unchanged (same size) files
     os.makedirs(args.dest, exist_ok=True)
+    con = idx.connect(args.dest)       # cache-index in the mirror root (best-effort)
     copied = skipped = 0
-    for uuid, ext, folder, name in docs:
+    for uuid, ext, folder, name, mod in docs:
         outdir = os.path.join(args.dest, folder)
         os.makedirs(outdir, exist_ok=True)
         target = os.path.join(outdir, f"{name}.{ext}")
         remote = f"{uuid}.{ext}"
         if os.path.exists(target) and os.path.getsize(target) == sizes.get(remote):
             skipped += 1
-            continue
-        subprocess.run(["scp", "-q", f"root@{args.host}:{DATA_DIR}/{remote}", target], check=True)
-        copied += 1
-        print(f"  + {os.path.join(folder, name)}.{ext}")
+        else:
+            subprocess.run(["scp", "-q", f"root@{args.host}:{DATA_DIR}/{remote}", target], check=True)
+            copied += 1
+            print(f"  + {os.path.join(folder, name)}.{ext}")
+        idx.mark(con, uuid, "pdf", name, target, mod)             # original is present
+        if uuid in dirs:                                          # also holds ink
+            idx.discover(con, uuid, "annotated", name, mod)
 
-    # 5. Record notebooks we couldn't export
+    # 5. Record notebooks we couldn't export (list them + register as discovered)
+    for uuid, relpath, name, mod in notebooks:
+        idx.discover(con, uuid, "notebook", name, mod)
     if notebooks:
         with open(os.path.join(args.dest, "_notebooks-not-exported.txt"), "w") as f:
             f.write("Handwritten notebooks (no PDF/EPUB original) — not exported:\n\n")
-            f.write("\n".join(sorted(notebooks)) + "\n")
+            f.write("\n".join(sorted(nb[1] for nb in notebooks)) + "\n")
 
-    annotated_total = sum(1 for d in docs if d[0] in dirs)   # originals that also hold ink
-    write_state("pull", {"originals": len(docs), "notebooks_total": len(notebooks),
-                         "annotated_total": annotated_total})
+    # 6. Prune index rows for docs no longer on the tablet, so counts stay honest
+    idx.prune(con, "pdf", {d[0] for d in docs})
+    idx.prune(con, "annotated", {d[0] for d in docs if d[0] in dirs})
+    idx.prune(con, "notebook", {nb[0] for nb in notebooks})
 
     print(f"\n==> done: {copied} copied, {skipped} unchanged, "
           f"{len(notebooks)} notebooks skipped (see _notebooks-not-exported.txt)")

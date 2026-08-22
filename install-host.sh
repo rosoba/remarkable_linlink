@@ -70,6 +70,7 @@ mkdir -p "$BIN_DIR"
 install -m 755 "$REPO_DIR/scripts/remarkable-stream.sh"       "$BIN_DIR/remarkable-stream.sh"
 install -m 755 "$REPO_DIR/scripts/remarkable-stream-watch.sh" "$BIN_DIR/remarkable-stream-watch.sh"
 # Wired file-management tools (need passwordless SSH to the tablet; see README).
+install -m 644 "$REPO_DIR/scripts/remlink_index.py"          "$BIN_DIR/remlink_index.py"
 install -m 755 "$REPO_DIR/scripts/rm-pull.py"                 "$BIN_DIR/rm-pull.py"
 install -m 755 "$REPO_DIR/scripts/rm-push.py"                 "$BIN_DIR/rm-push.py"
 install -m 755 "$REPO_DIR/scripts/rm-render.py"               "$BIN_DIR/rm-render.py"

@@ -71,6 +71,15 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   kiosk" kills all kiosk windows by data-dir + relaunches one via
   `remarkable-stream.sh` — the fix for "Rate limited" (two viewers). Library counts
   come from `~/.cache/remlink-state.json`, written by the rm-* tools on full runs.
+- `scripts/remlink_index.py` — shared SQLite cache-index (`~/remarkable_mirror/
+  .remlink-index.db`). Tools import it via `sys.path.insert(dirname(__file__))`
+  (installed alongside in `~/.local/bin`). Keyed `(uuid, kind)` where kind ∈
+  pdf/notebook/annotated; stores tablet `lastModified` + `processed_at`. rm-pull
+  registers all docs (denominators) + prunes deleted; render/annotate skip via
+  `is_current` (re-render when tablet `lastModified` newer; adopt pre-existing
+  outputs) and `mark`. remlink reads `counts()`. Pure cache: delete → filesystem
+  "skip if output exists" fallback, rebuilt on next pull. Replaced the old
+  `~/.cache/remlink-state.json` aggregate.
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.

@@ -8,12 +8,12 @@ out and parses the tools' stdout for progress. See docs/concepts/status-app.md.
 Requires python3-tk (install-host.sh installs it). Launches from the app grid as
 "remlink", by the `remlink` command, or automatically on USB plug-in.
 """
-import json
 import os
 import queue
 import re
 import socket
 import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
@@ -24,18 +24,12 @@ STREAM_PORT = 2001
 SSH_PORT = 22
 KIOSK_DIR = os.path.expanduser("~/.config/remarkable-kiosk")
 MIRROR_DIR = os.path.expanduser("~/remarkable_mirror")
-STATE_FILE = os.path.expanduser("~/.cache/remlink-state.json")
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import remlink_index as idx  # noqa: E402
 
 # green=done/healthy, red=none/down, orange=partial/needs-heal, blue=processing, grey=unknown
 GREEN, RED, GREY, ORANGE, BLUE = "#2e7d32", "#c62828", "#9e9e9e", "#ef6c00", "#1565c0"
-
-
-def load_state():
-    """The bookkeeping the rm-* tools leave behind (counts + timestamps)."""
-    try:
-        return json.load(open(STATE_FILE))
-    except (OSError, json.JSONDecodeError):
-        return {}
 
 
 def _tool(name):
@@ -160,7 +154,7 @@ class App:
                 "Kiosk": GREEN if kiosk_running() else GREY,
                 "Service": GREEN if stream else (RED if ssh else GREY),
             }
-            self.q.put(("status", (conn, load_state(), ssh, auth, stream)))
+            self.q.put(("status", (conn, idx.counts(MIRROR_DIR), ssh, auth, stream)))
             time.sleep(3)
 
     # ---- run an action (background) ----
@@ -220,10 +214,10 @@ class App:
             while True:
                 kind, payload = self.q.get_nowait()
                 if kind == "status":
-                    conn, state, ssh, auth, stream = payload
+                    conn, counts, ssh, auth, stream = payload
                     for key, color in conn.items():
                         self.conn_dots[key].config(fg=color)
-                    self.update_library(state)
+                    self.update_library(counts)
                     if not ssh:
                         hint = "tablet not connected"
                     elif not auth:
@@ -245,32 +239,25 @@ class App:
                         b.config(state="normal")
                     self.stop_btn.config(state="disabled")
                     self.running_category = None
-                    self.update_library(load_state())     # reflect what the tool just wrote
+                    self.update_library(idx.counts(MIRROR_DIR))   # reflect what the tool wrote
         except queue.Empty:
             pass
         self.root.after(120, self.drain)
 
-    def update_library(self, state):
-        pull = state.get("pull", {})
-        render = state.get("render", {})
-        anno = state.get("annotate", {})
-        self._lib("PDFs", pull.get("originals"), None, "pull")
-        nb = (render.get("done", 0) + render.get("present", 0)) if render else None
-        self._lib("Notebooks", nb, pull.get("notebooks_total"), "render")
-        an = (anno.get("done", 0) + anno.get("present", 0)) if anno else None
-        self._lib("Annotated", an, pull.get("annotated_total"), "annotate")
+    def update_library(self, counts):
+        rows = {"PDFs": ("pdf", "pull"), "Notebooks": ("notebook", "render"),
+                "Annotated": ("annotated", "annotate")}
+        for label, (kind, cat) in rows.items():
+            dt = counts.get(kind) if counts else None
+            done, total = dt if dt else (None, None)
+            self._lib(label, done, total, cat)
 
     def _lib(self, key, done, total, category):
         dot, val = self.lib_rows[key]
         if self.running_category == category:
             dot.config(fg=BLUE); val.config(text="processing…"); return
-        if total is None:                       # a plain count (PDFs mirrored)
-            dot.config(fg=GREY if not done else GREEN)
-            val.config(text="—" if done is None else str(done))
-            return
-        if done is None:                        # this tool has never run
-            dot.config(fg=GREY); val.config(text=f"0/{total}" if total else "—")
-            return
+        if total is None:                       # no index yet / unknown
+            dot.config(fg=GREY); val.config(text="—"); return
         val.config(text=f"{done}/{total}")
         dot.config(fg=GREEN if (total == 0 or done >= total)
                    else RED if done == 0 else ORANGE)
