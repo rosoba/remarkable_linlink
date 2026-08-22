@@ -25,7 +25,14 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
 5. HTTPS-only (http → 400). Cert is self-signed → Chrome uses
    `--ignore-certificate-errors --test-type`.
 6. SSH: RSA key (Paper Pro / rM2 reject ed25519); modern OpenSSH may need
-   `PubkeyAcceptedKeyTypes=+ssh-rsa` in `~/.ssh/config`.
+   `PubkeyAcceptedKeyTypes=+ssh-rsa` in `~/.ssh/config`. The tablet **regenerates
+   its host key on every firmware update** (and differs per device), so a stored
+   fingerprint causes `HOST IDENTIFICATION HAS CHANGED` → ssh refuses → every tool
+   breaks and remlink's Tablet dot goes orange (mislabelled "not authorized"). Fix:
+   the `Host 10.11.99.1` block sets `UserKnownHostsFile /dev/null` +
+   `StrictHostKeyChecking accept-new` (safe on a direct USB link). install-host.sh
+   writes this and UPGRADES an older block (awk-strips the old stanza, re-adds). If
+   the dot is still orange after that, it's genuinely unauthorised → `ssh-copy-id`.
 7. **A tablet OS update wipes the systemd unit.** Updates replace the whole root
    partition; `/etc/systemd/system/goMarkableStream.service` vanishes → `:2001`
    closed → no kiosk, while `:22` still works. Binary/config/JWT secret survive in

@@ -40,8 +40,11 @@ fi
 
 # 2b. SSH access to the tablet — needed by the rm-* file tools and setup-tablet.sh.
 #     RSA key (Paper Pro / rM2 reject ed25519), passphraseless so the background
-#     watcher can use it non-interactively; plus an idempotent config block that
-#     applies the legacy-algorithm options the tablet requires.
+#     watcher can use it non-interactively; plus an idempotent config block. The
+#     block disables host-key storage/verification for 10.11.99.1 because it's a
+#     direct USB link (no MITM risk) and the tablet REGENERATES its host key on
+#     every firmware update — otherwise ssh refuses with "HOST IDENTIFICATION HAS
+#     CHANGED" and every tool (pull/render/heal + the status dot) breaks.
 SSH_DIR="$HOME/.ssh"; SSH_CFG="$SSH_DIR/config"
 mkdir -p "$SSH_DIR"; chmod 700 "$SSH_DIR"
 if [ ! -f "$SSH_DIR/id_rsa" ]; then
@@ -49,8 +52,21 @@ if [ ! -f "$SSH_DIR/id_rsa" ]; then
     ssh-keygen -t rsa -b 4096 -N "" -C "remarkable_linlink@$(hostname)" -f "$SSH_DIR/id_rsa" >/dev/null
 fi
 chmod 600 "$SSH_DIR/id_rsa" 2>/dev/null || true
-if ! grep -qE '^[[:space:]]*Host[[:space:]]+10\.11\.99\.1[[:space:]]*$' "$SSH_CFG" 2>/dev/null; then
-    echo "  - Adding ~/.ssh/config block for the tablet (10.11.99.1)"
+# Up to date only if an existing block already disables host-key checking.
+if ! sed -n '/^Host 10\.11\.99\.1[[:space:]]*$/,/^$/p' "$SSH_CFG" 2>/dev/null \
+        | grep -q 'UserKnownHostsFile /dev/null'; then
+    echo "  - Writing ~/.ssh/config block for the tablet (10.11.99.1)"
+    [ -f "$SSH_CFG" ] && cp "$SSH_CFG" "$SSH_CFG.bak"
+    # strip any existing 10.11.99.1 stanza, then append the current one
+    if [ -f "$SSH_CFG" ]; then
+        awk '
+          /^[Hh]ost[[:space:]]+10\.11\.99\.1[[:space:]]*$/ { inblk=1; next }
+          inblk && /^[[:space:]]/ { next }
+          inblk && /^$/           { inblk=0; next }
+          inblk                   { inblk=0 }
+          { print }
+        ' "$SSH_CFG" > "$SSH_CFG.tmp" && mv "$SSH_CFG.tmp" "$SSH_CFG"
+    fi
     cat >> "$SSH_CFG" <<'SSHCFG'
 
 Host 10.11.99.1
@@ -59,7 +75,9 @@ Host 10.11.99.1
     PubkeyAcceptedKeyTypes +ssh-rsa
     IdentityFile ~/.ssh/id_rsa
     IdentitiesOnly yes
+    UserKnownHostsFile /dev/null
     StrictHostKeyChecking accept-new
+    LogLevel ERROR
 SSHCFG
     chmod 600 "$SSH_CFG"
 fi
