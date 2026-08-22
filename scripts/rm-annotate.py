@@ -168,8 +168,10 @@ def render_annotated(host, uuid, out_pdf):
             writer.add_page(out)
             n_ink += 1
         os.makedirs(os.path.dirname(out_pdf), exist_ok=True)
-        with open(out_pdf, "wb") as f:
+        part = out_pdf + ".part"          # write atomically so an interrupted run
+        with open(part, "wb") as f:       # never leaves a partial PDF to be "adopted"
             writer.write(f)
+        os.replace(part, out_pdf)
         return n_ink
     finally:
         import shutil
