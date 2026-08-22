@@ -76,6 +76,7 @@ the one-time `ssh-copy-id` (needs the tablet password interactively).
 | `scripts/remarkable-stream.sh` | Ubuntu | Manual launcher (desktop icon / app menu). |
 | `scripts/rm-pull.py` | Ubuntu → tablet (SSH) | Mirror the library to a local folder (one-way, read-only on the tablet). |
 | `scripts/rm-push.py` | Ubuntu → tablet (SSH) | Upload a PDF/EPUB to the tablet (add-only; never deletes). |
+| `scripts/rm-render.py` | Ubuntu → tablet (SSH) | Export handwritten notebooks to PDF (offline; self-managing venv). |
 | `bin/gomarkablestream-RMPRO` | (cached) | The tablet binary, downloaded by `setup-tablet.sh` (gitignored by default). |
 
 Installed locations on the host:
@@ -126,9 +127,28 @@ directly over the same USB/SSH link. Two tools (also installed to `~/.local/bin`
 **Requires** passwordless SSH to the tablet from this host (the `Host 10.11.99.1`
 block in `~/.ssh/config` with `PubkeyAcceptedKeyTypes +ssh-rsa`; see setup).
 
-**Handwritten notebooks are not exported.** They live in reMarkable's `.rm` lines
-format, not PDF; `rm-pull.py` lists them in `_notebooks-not-exported.txt`. Rendering
-them to PDF needs a renderer that supports the Paper Pro (color) format.
+**Handwritten notebooks** are *not* handled by `rm-pull.py` — they live in
+reMarkable's `.rm` lines format, not PDF, so `rm-pull.py` only lists them in
+`_notebooks-not-exported.txt`. Use `rm-render.py` (below) to export them.
+
+### Export handwritten notebooks → PDF
+
+```bash
+./scripts/rm-render.py --list                 # list all notebooks
+./scripts/rm-render.py --name "Defence"       # render matching notebooks
+./scripts/rm-render.py                         # render ALL into ~/remarkable_mirror
+```
+
+Renders the `.rm` pages (including the Paper Pro's **v6 colour** format) to PDF,
+entirely offline, and drops each into the mirror tree next to the pulled PDFs.
+Read-only on the tablet. On first run it builds a private venv (`rmc`, `rmscene`,
+`cairosvg`, `pypdf`) under `~/.config/remarkable-linlink/rmvenv` — no manual pip.
+
+Caveats: only *pure* notebooks are rendered (annotated PDFs are skipped — merging
+ink onto the source PDF is a separate job, see [`remarks`](https://github.com/lucasrla/remarks));
+unknown pen colours fall back to highlighter-yellow and very new brush types may
+render imperfectly. Legibility is generally excellent. It is **on-demand only**
+(not run on plug-in — rendering the whole library is slow).
 
 ### Auto-mirror on plug-in (opt-in)
 

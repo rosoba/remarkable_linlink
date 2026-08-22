@@ -39,6 +39,13 @@ plug-and-play fullscreen kiosk. This file is the fast-orientation for future wor
   original PDFs/EPUBs only. Handwritten `.rm` notebooks are listed, not exported.
 - `scripts/rm-push.py` — wired upload (add-only): writes `<uuid>.{pdf,metadata,content}`
   then `systemctl restart xochitl`. Never deletes.
+- `scripts/rm-render.py` — export handwritten notebooks (`.rm` v6) to PDF offline.
+  Self-managing venv (`rmc`+`rmscene`+`cairosvg`+`pypdf`) under
+  `~/.config/remarkable-linlink/rmvenv`; re-execs into it (detect via `sys.prefix`,
+  NOT realpath — realpath collapses venvs to the base python). rmc 0.3.0 crashes on
+  Paper Pro `HIGHLIGHT` colour id 9 → we patch `RM_PALETTE` to `.get(id, yellow)`.
+  rmc's own PDF path uses snap Inkscape (sandboxed, fails) → we go `.rm`→SVG (rmc)
+  →PDF (cairosvg, white bg)→merge (pypdf). Pure notebooks only; on-demand.
 - Auto-mirror: the watcher runs `rm-pull.py` on plug-in **iff** `~/remarkable_mirror`
   exists (opt-in). NEVER point bidirectional sync (Unison) at the xochitl store — it
   races the live app and can propagate deletes onto the tablet.

@@ -41,6 +41,7 @@ install -m 755 "$REPO_DIR/scripts/remarkable-stream-watch.sh" "$BIN_DIR/remarkab
 # Wired file-management tools (need passwordless SSH to the tablet; see README).
 install -m 755 "$REPO_DIR/scripts/rm-pull.py"                 "$BIN_DIR/rm-pull.py"
 install -m 755 "$REPO_DIR/scripts/rm-push.py"                 "$BIN_DIR/rm-push.py"
+install -m 755 "$REPO_DIR/scripts/rm-render.py"               "$BIN_DIR/rm-render.py"
 
 # 4. Autostart entry (starts the plug-in watcher with the GNOME session)
 echo "  - Installing autostart watcher to $AUTOSTART_DIR"
